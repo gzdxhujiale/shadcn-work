@@ -23,6 +23,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { useNavigation } from '@/composables/useNavigation'
 
 const props = withDefaults(
   defineProps<{
@@ -41,6 +42,18 @@ const props = withDefaults(
 )
 
 const { isMobile } = useSidebar()
+const { currentSubNav, setNavigation, setDetailTitle } = useNavigation()
+
+// 处理项目点击
+const handleProjectClick = (projectName: string) => {
+  setNavigation(props.label, projectName)
+  setDetailTitle(null)
+}
+
+// 检查项目是否激活
+const isProjectActive = (projectName: string) => {
+  return currentSubNav.value === projectName
+}
 </script>
 
 <template>
@@ -48,7 +61,11 @@ const { isMobile } = useSidebar()
     <SidebarGroupLabel>{{ props.label }}</SidebarGroupLabel>
     <SidebarMenu>
       <SidebarMenuItem v-for="item in projects" :key="item.name">
-        <SidebarMenuButton as-child>
+        <SidebarMenuButton 
+          as-child
+          @click="handleProjectClick(item.name)"
+          :class="{ 'bg-primary/10 text-primary font-medium': isProjectActive(item.name) }"
+        >
           <a :href="item.url">
             <component :is="item.icon" />
             <span>{{ item.name }}</span>
@@ -91,3 +108,4 @@ const { isMobile } = useSidebar()
     </SidebarMenu>
   </SidebarGroup>
 </template>
+
