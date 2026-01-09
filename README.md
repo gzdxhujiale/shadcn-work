@@ -247,7 +247,7 @@ npm run type-check
 git remote remove origin
 
 # 2. 再创建新仓库并设置 origin
-gh repo create shadcn-init --public --source=. --remote=origin && git push -u origin main
+gh repo create shadcn-work --public --source=. --remote=origin && git push -u origin main
 ```
 
 ---

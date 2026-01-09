@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { Construction, ArrowLeft } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
-import { useNavigation } from '@/composables/useNavigation'
+import { Construction } from 'lucide-vue-next'
+import { useNavigation } from '@/config/sidebar'
 
 const props = withDefaults(
   defineProps<{
@@ -14,12 +13,8 @@ const props = withDefaults(
   }
 )
 
-const { currentSubNav, setNavigation } = useNavigation()
+const { currentSubNav } = useNavigation()
 
-// 返回待办清单
-const goToTodoList = () => {
-  setNavigation('工作台', '待办清单')
-}
 </script>
 
 <template>
@@ -47,14 +42,6 @@ const goToTodoList = () => {
           <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
         </span>
         开发进行中
-      </div>
-      
-      <!-- 返回按钮 -->
-      <div>
-        <Button variant="outline" class="gap-2" @click="goToTodoList">
-          <ArrowLeft class="w-4 h-4" />
-          返回待办清单
-        </Button>
       </div>
     </div>
   </div>

@@ -23,7 +23,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { useNavigation } from '@/composables/useNavigation'
+import { useNavigation } from '@/config/sidebar'
 
 const props = withDefaults(
   defineProps<{
@@ -34,10 +34,12 @@ const props = withDefaults(
       url: string
       icon: LucideIcon
     }[]
+    showLabel?: boolean
   }>(),
   {
     label: 'Projects',
     showMoreButton: true,
+    showLabel: true,
   }
 )
 
@@ -58,7 +60,7 @@ const isProjectActive = (projectName: string) => {
 
 <template>
   <SidebarGroup class="group-data-[collapsible=icon]:hidden">
-    <SidebarGroupLabel>{{ props.label }}</SidebarGroupLabel>
+    <SidebarGroupLabel v-if="props.showLabel">{{ props.label }}</SidebarGroupLabel>
     <SidebarMenu>
       <SidebarMenuItem v-for="item in projects" :key="item.name">
         <SidebarMenuButton 

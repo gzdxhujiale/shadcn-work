@@ -1,5 +1,5 @@
 {
-  "name": "shadcn-init",
+  "name": "shadcn-work",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,12 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@internationalized/date": "^3.10.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/vue-table": "^8.21.3",
     "@vueuse/core": "^14.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "lucide-vue-next": "^0.562.0",
+    "radix-vue": "^1.9.17",
     "reka-ui": "^2.7.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.18",

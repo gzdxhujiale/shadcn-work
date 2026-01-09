@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { SidebarProps } from '@/components/ui/sidebar'
-import { defaultSidebarConfig, type SidebarConfig, type NavMainItem } from '@/config/sidebar'
+import { defaultSidebarConfig, type SidebarConfig } from '@/config/sidebar'
 
 import NavMain from '@/components/NavMain.vue'
 import NavProjects from '@/components/NavProjects.vue'
@@ -119,6 +119,7 @@ const filteredProjectGroups = computed(() => {
         v-for="(group, index) in filteredNavGroups" 
         :key="group.id ?? `nav-${index}`"
         :label="group.label"
+        :show-label="group.showLabel ?? true"
         :items="group.items" 
         :is-open="group.items.some(i => i.isOpen)" 
       />
@@ -127,6 +128,7 @@ const filteredProjectGroups = computed(() => {
         v-for="(group, index) in filteredProjectGroups" 
         :key="group.id ?? `project-${index}`"
         :label="group.label"
+        :show-label="group.showLabel ?? true"
         :projects="group.projects"
         :show-more-button="group.showMoreButton"
       />

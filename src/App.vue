@@ -12,22 +12,18 @@ import {
 } from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-import { useNavigation } from '@/composables/useNavigation'
+import { useNavigation } from '@/config/sidebar'
 
 // 导入页面组件
-import TodoList from '@/components/pages/workspace/TodoList.vue'
+import Withdraw from '@/components/pages/workspace/Withdraw.vue'
 import PlaceholderPage from '@/components/pages/PlaceholderPage.vue'
 
 const { breadcrumbs, currentPage, setDetailTitle } = useNavigation()
 
 // 页面组件映射
 const pageComponents: Record<string, any> = {
-  TodoList,
+  Withdraw,
   // 后续添加更多页面时，在此注册...
-  // History,
-  // ReportCompany,
-  // ReportAmeba,
-  // ...
 }
 
 // 当前显示的组件 - 未注册的页面显示占位组件

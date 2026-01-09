@@ -16,7 +16,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar'
-import { useNavigation } from '@/composables/useNavigation'
+import { useNavigation } from '@/config/sidebar'
 
 const props = withDefaults(
   defineProps<{
@@ -32,9 +32,11 @@ const props = withDefaults(
         url: string
       }[]
     }[]
+    showLabel?: boolean
   }>(),
   {
     label: 'Platform',
+    showLabel: true,
   }
 )
 
@@ -53,13 +55,13 @@ const isSubItemActive = (subTitle: string) => {
 
 // 检查主项是否有激活的子项
 const hasActiveChild = (item: any) => {
-  return item.items?.some((sub: any) => sub.title === currentSubNav.value)
+  return item.items?.some((sub: any) => sub.title === currentSubNav.value) // eslint-disable-line
 }
 </script>
 
 <template>
   <SidebarGroup>
-    <SidebarGroupLabel>{{ props.label }}</SidebarGroupLabel>
+    <SidebarGroupLabel v-if="props.showLabel">{{ props.label }}</SidebarGroupLabel>
     <SidebarMenu>
       <Collapsible
         v-for="item in items"
