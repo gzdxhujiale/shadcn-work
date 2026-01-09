@@ -7,6 +7,11 @@ Learn more about the recommended Project Setup and IDE Support in the [Vue Docs 
 
 重命名文件夹：
 package.json 、index.html 、package-lock.json需要修改相应的name
-在本地终端更新远程地址：
-git remote set-url origin https://github.com/gzdxhujiale/shadcn-portfolio.git
+
+# 1. 先删除现有的 origin
+git remote remove origin
+
+# 2. 再创建新仓库并设置 origin
+gh repo create shadcn-init --public --source=. --remote=origin && git push -u origin main
+
 
