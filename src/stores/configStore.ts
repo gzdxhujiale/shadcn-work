@@ -291,7 +291,63 @@ export const useConfigStore = defineStore('config', () => {
         return null
     }
 
-    // 同步 sidebar 配置到源码 (仅更新 title 和 template)
+    // 辅助函数：查找匹配的括号
+    function findBalancedBlock(text: string, startIndex: number): { start: number, end: number, content: string } | null {
+        let balance = 0
+        let started = false
+
+        for (let i = startIndex; i < text.length; i++) {
+            if (text[i] === '{' || text[i] === '[') {
+                balance++
+                started = true
+            } else if (text[i] === '}' || text[i] === ']') {
+                balance--
+                if (started && balance === 0) {
+                    return { start: startIndex, end: i + 1, content: text.substring(startIndex, i + 1) }
+                }
+            }
+        }
+        return null
+    }
+
+    // 辅助函数：根据 ID 查找对象块
+    function findObjectBlockById(text: string, id: string): { start: number, end: number, text: string } | null {
+        // 尝试单引号和双引号
+        const idVariations = [`id: '${id}'`, `id: "${id}"`]
+        let idIndex = -1
+
+        for (const v of idVariations) {
+            idIndex = text.indexOf(v)
+            if (idIndex !== -1) break
+        }
+
+        if (idIndex === -1) return null
+
+        // 向后查找开大括号
+        let openIdx = -1
+        let balance = 0
+        for (let i = idIndex; i >= 0; i--) {
+            if (text[i] === '}') balance++
+            else if (text[i] === '{') {
+                if (balance === 0) {
+                    openIdx = i
+                    break
+                }
+                balance--
+            }
+        }
+
+        if (openIdx === -1) return null
+
+        // 使用通用的平衡查找向前查找闭大括号
+        const block = findBalancedBlock(text, openIdx)
+        if (!block) return null
+
+        return { start: block.start, end: block.end, text: block.content }
+    }
+
+
+    // 同步 sidebar 配置到源码
     async function syncSidebarConfig(): Promise<boolean> {
         const filename = 'sidebar.ts'
         let content = await readSourceFile(filename)
@@ -299,83 +355,80 @@ export const useConfigStore = defineStore('config', () => {
 
         let hasChanges = false
 
-        // 遍历内存中的所有导航项，检查并更新源码
+        // 遍历内存中的所有导航项
         for (const group of navGroups.value) {
             for (const mainItem of group.items) {
-                // 更新主导航项 (如果需要)
-                if (mainItem.id) {
-                    // TODO: 如果主导航项支持修改，可以在这里添加逻辑
+                if (!mainItem.id) continue
+
+                // 1. 查找主导航项的代码块
+                const blockInfo = findObjectBlockById(content, mainItem.id)
+                if (!blockInfo) {
+                    console.warn(`[Sync] Could not find block for Main ID ${mainItem.id}`)
+                    continue
                 }
 
-                if (mainItem.items) {
-                    for (const subItem of mainItem.items) {
-                        if (!subItem.id) continue
+                let newBlock = blockInfo.text
+                let blockChanged = false
 
-                        // 使用正则查找对应的 ID 块
-                        // 匹配模式：id: 'xxx', 后面跟着任意字符，直到 }
-                        // 注意：这只是一个简单的匹配，假设代码格式比较标准
-                        const idPattern = new RegExp(`id:\\s*['"]${subItem.id}['"][\\s\\S]*?\\}`, 'g')
-                        const match = idPattern.exec(content)
+                // 2. 更新 Title (如果变化)
+                const titlePattern = /(title:\s*['"])(.*?)(['"])/
+                const titleMatch = titlePattern.exec(newBlock)
+                if (titleMatch && titleMatch[2] !== mainItem.title) {
+                    newBlock = newBlock.replace(titlePattern, `$1${mainItem.title}$3`)
+                    blockChanged = true
+                }
 
-                        if (match) {
-                            let block = match[0]
-                            let blockChanged = false
+                // 3. 更新 Items (重建数组)
+                const itemsMarker = 'items: ['
+                const itemsStartRel = newBlock.indexOf(itemsMarker)
 
-                            console.log(`[Sync] Found block for ID ${subItem.id}:`, block)
+                if (itemsStartRel !== -1 && mainItem.items) {
+                    // 找到现有的 items 数组块
+                    // itemsMarker is 'items: ['. indexOf gives start of 'i'.
+                    // 7 chars: 'i','t','e','m','s',':',' ' (if space).
+                    // Actually let's assume 'items:' search then find '['.
 
-                            // 1. 检查并更新 Title
-                            const titlePattern = /(title:\s*['"])(.*?)(['"])/
-                            const titleMatch = titlePattern.exec(block)
-                            if (titleMatch && titleMatch[2] !== subItem.title) {
-                                console.log(`[Sync] Updating title for ${subItem.id}: ${titleMatch[2]} -> ${subItem.title}`)
-                                block = block.replace(titlePattern, `$1${subItem.title}$3`)
+                    // Helper inside logic:
+                    let arrayStartRel = newBlock.indexOf('[', itemsStartRel)
+                    if (arrayStartRel !== -1) {
+                        const arrayBlock = findBalancedBlock(newBlock, arrayStartRel)
+                        if (arrayBlock) {
+                            // 生成新的 sub-items 代码
+                            const indent = '                        ' // 24 spaces
+                            const subItemsCode = mainItem.items.map(sub => {
+                                let s = `${indent}{ id: '${sub.id}', title: '${sub.title}', url: '${sub.url}'`
+                                if (sub.template) s += `, template: '${sub.template}'`
+                                // template handling: default empty string? 
+                                // Original code had template: 'Page1'.
+                                // If empty template? don't write it? or write ''?
+                                // Re-read existing style: template: '' exists in file.
+                                // So write it always or if present.
+                                if (sub.template === '') s += `, template: ''`
+
+                                s += ` },`
+                                return s
+                            }).join('\n')
+
+                            const newArrayContent = `[\n${subItemsCode}\n                    ]` // 20 spaces indent for bracket
+
+                            if (arrayBlock.content !== newArrayContent) {
+                                newBlock = newBlock.substring(0, arrayBlock.start) + newArrayContent + newBlock.substring(arrayBlock.end)
                                 blockChanged = true
                             }
-
-                            // 2. 检查并更新 Template
-                            const templatePattern = /(template:\s*['"])(.*?)(['"])/
-                            const templateMatch = templatePattern.exec(block)
-
-                            if (templateMatch) {
-                                // 如果存在 template 字段，更新它
-                                const currentTemplate = templateMatch[2]
-                                const newTemplate = subItem.template || ''
-
-                                console.log(`[Sync] Found template for ${subItem.id}: '${currentTemplate}', New: '${newTemplate}'`)
-
-                                if (currentTemplate !== newTemplate) {
-                                    console.log(`[Sync] Updating template for ${subItem.id}`)
-                                    block = block.replace(templatePattern, `$1${newTemplate}$3`)
-                                    blockChanged = true
-                                }
-                            } else if (subItem.template) {
-                                console.log(`[Sync] Adding template for ${subItem.id}: ${subItem.template}`)
-                                // 如果不存在 template 字段，但内存中有值，则添加
-                                // 重新在 block (可能是更新过 title 后的) 中查找 title 位置用于插入
-                                const currentTitleMatch = titlePattern.exec(block)
-                                if (currentTitleMatch) {
-                                    block = block.replace(titlePattern, `$1${currentTitleMatch[2]}$3, template: '${subItem.template}'`)
-                                    blockChanged = true
-                                }
-                            }
-
-                            // 如果块有变化，更新原始内容
-                            if (blockChanged) {
-                                content = content.replace(match[0], block)
-                                hasChanges = true
-                            }
-                        } else {
-                            console.warn(`[Sync] Could not find block for ID ${subItem.id} in sidebar.ts`)
                         }
                     }
+                }
+
+                // 4. 写回
+                if (blockChanged) {
+                    content = content.substring(0, blockInfo.start) + newBlock + content.substring(blockInfo.end)
+                    hasChanges = true
                 }
             }
         }
 
-        // 如果没有变化，直接返回成功
         if (!hasChanges) return true
 
-        // 写入更新后的内容
         try {
             const response = await fetch('/__api/write-config', {
                 method: 'POST',
@@ -444,6 +497,7 @@ export interface FilterConfig {
     options?: string[]
     treeOptions?: TreeNode[]
     defaultValue?: string | DateRange | undefined
+    visible?: boolean
 }
 
 /**
@@ -465,6 +519,7 @@ export interface TableColumn {
     minWidth?: string                 // 最小宽度
     type?: 'text' | 'badge' | 'status-badge'
     fixed?: 'left' | 'right'          // 列固定位置
+    visible?: boolean
 }
 
 /**
@@ -487,6 +542,7 @@ export interface ActionButtonConfig {
     label: string
     variant?: 'default' | 'outline' | 'secondary' | 'ghost'
     className?: string       // 自定义样式类
+    visible?: boolean
 }
 
 /**
@@ -562,6 +618,9 @@ export const page1Configs: Record<string, Page1Config> = {
                 if (filter.treeOptions && filter.treeOptions.length > 0) {
                     code += `,\n                    treeOptions: ${JSON.stringify(filter.treeOptions, null, 24).replace(/"([^"]+)":/g, '$1:').trim()}`
                 }
+                if (filter.visible === false) {
+                    code += `, visible: false`
+                }
                 code += ` },\n`
             })
             code += `            ],\n`
@@ -581,6 +640,7 @@ export const page1Configs: Record<string, Page1Config> = {
                 if (col.minWidth) code += `, minWidth: '${col.minWidth}'`
                 if (col.type) code += `, type: '${col.type}'`
                 if (col.fixed) code += `, fixed: '${col.fixed}'`
+                if (col.visible === false) code += `, visible: false`
                 code += ` },\n`
             })
             code += `            ],\n`
@@ -593,6 +653,7 @@ export const page1Configs: Record<string, Page1Config> = {
                     code += `            { key: '${action.key}', label: '${action.label}'`
                     if (action.variant) code += `, variant: '${action.variant}'`
                     if (action.className) code += `,\n                className: '${action.className}'`
+                    if (action.visible === false) code += `, visible: false`
                     code += ` },\n`
                 })
                 code += `        ],\n`

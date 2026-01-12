@@ -155,8 +155,8 @@ export const defaultSidebarConfig: SidebarConfig = {
                     items: [
                         { id: '1', title: '提现', url: '#', template: 'Page1' },
                         { id: '2', title: '提现币商代发薪资', url: '#', template: 'Page1' },
-                        { id: '3', title: '公会薪资转账', url: '#', template: '' },
                         { id: '4', title: '提现黑名单', url: '#', template: '' },
+                        { id: '3', title: '公会薪资转账', url: '#', template: '' },
                         { id: '5', title: '离线打款', url: '#', template: '' },
                         { id: '6', title: '在线打款', url: '#', template: '' },
                         { id: '7', title: '大款订单', url: '#', template: '' },

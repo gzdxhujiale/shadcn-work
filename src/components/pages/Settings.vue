@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Layers, Plus, Pencil, Trash2, Settings2, Save, FileCode, GripVertical, Info } from 'lucide-vue-next'
+import { ref, computed, onMounted, reactive } from 'vue'
+import { Layers, Plus, Pencil, Trash2, Settings2, Save, FileCode, GripVertical, Info, ChevronRight, ChevronDown, Eye, EyeOff, Square } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +38,25 @@ const configStore = useConfigStore()
 
 // UI State - 当前选中的导航项
 const selectedNavId = ref<string | null>(null)
+
+// 一级导航展开/折叠状态
+const expandedMainItems = reactive<Record<string, boolean>>({})
+
+// 初始化展开状态（默认全部展开）
+const initExpandedState = () => {
+  configStore.navGroups.forEach(group => {
+    group.items.forEach(mainItem => {
+      if (expandedMainItems[mainItem.id] === undefined) {
+        expandedMainItems[mainItem.id] = mainItem.isOpen ?? true
+      }
+    })
+  })
+}
+
+// 切换一级导航展开状态
+const toggleMainItemExpand = (mainItemId: string) => {
+  expandedMainItems[mainItemId] = !expandedMainItems[mainItemId]
+}
 
 // Dialog State
 const editNavDialogOpen = ref(false)
@@ -113,6 +131,7 @@ const currentPageConfig = computed(() => {
 
 // 默认选中第一个导航项
 onMounted(() => {
+  initExpandedState()
   if (allSubNavItems.value.length > 0 && !selectedNavId.value) {
     selectedNavId.value = allSubNavItems.value[0].subItem.id
   }
@@ -154,6 +173,92 @@ const handleEditNav = () => {
     )
     closeEditNavDialog()
   }
+}
+
+// ============================================
+// Add/Delete Sub Navigation
+// ============================================
+
+// Add Sub Nav Dialog State
+const addSubNavDialogOpen = ref(false)
+const addSubNavTargetGroup = ref(0)
+const addSubNavTargetMainId = ref('')
+const addSubNavForm = ref({ title: '', url: '#' })
+
+const openAddSubNavDialog = (groupIndex: number, mainItemId: string) => {
+  addSubNavTargetGroup.value = groupIndex
+  addSubNavTargetMainId.value = mainItemId
+  addSubNavForm.value = { title: '', url: '#' }
+  addSubNavDialogOpen.value = true
+}
+
+const closeAddSubNavDialog = () => {
+  addSubNavDialogOpen.value = false
+}
+
+const handleAddSubNav = () => {
+  if (addSubNavForm.value.title) {
+    configStore.addSubNavItem(
+      addSubNavTargetGroup.value,
+      addSubNavTargetMainId.value,
+      {
+        title: addSubNavForm.value.title,
+        url: addSubNavForm.value.url,
+        template: ''
+      }
+    )
+    closeAddSubNavDialog()
+  }
+}
+
+// Add Main Nav Dialog State
+const addMainNavDialogOpen = ref(false)
+const addMainNavForm = ref({ title: '', icon: Square })
+
+const openAddMainNavDialog = () => {
+  addMainNavForm.value = { title: '', icon: Square }
+  addMainNavDialogOpen.value = true
+}
+
+const closeAddMainNavDialog = () => {
+  addMainNavDialogOpen.value = false
+}
+
+const handleAddMainNav = () => {
+    if (addMainNavForm.value.title) {
+        // Default to group 0 (Platform)
+        configStore.addNavMainItem(0, {
+            title: addMainNavForm.value.title,
+            icon: addMainNavForm.value.icon,
+            url: '',
+            items: []
+        })
+        closeAddMainNavDialog()
+    }
+}
+
+const handleDeleteSubNav = (groupIndex: number, mainItemId: string, subItemId: string, subItemTitle: string) => {
+  showConfirm(
+    '确定删除导航项？',
+    `确定要删除导航项 "${subItemTitle}" 吗？相关的页面配置也会被删除。`,
+    () => {
+      configStore.deleteSubNavItem(groupIndex, mainItemId, subItemId)
+      // 如果删除的是当前选中的导航项，清除选中状态
+      if (selectedNavId.value === subItemId) {
+        selectedNavId.value = null
+      }
+    }
+  )
+}
+
+const handleDeleteCurrentNav = () => {
+  if (!selectedNavInfo.value) return
+  handleDeleteSubNav(
+    selectedNavInfo.value.groupIndex,
+    selectedNavInfo.value.mainItemId,
+    selectedNavInfo.value.subItem.id,
+    selectedNavInfo.value.subItem.title
+  )
 }
 
 // ============================================
@@ -284,6 +389,36 @@ const handleDeleteFilter = (index: number) => {
       }
     }
   )
+}
+
+// 切换筛选项可见性
+const toggleFilterVisibility = (index: number) => {
+  if (!selectedNavId.value) return
+  const config = configStore.page1Configs[selectedNavId.value]
+  if (config) {
+    const filter = config.filterArea.filters[index]
+    filter.visible = filter.visible === false ? true : false
+  }
+}
+
+// 切换列可见性
+const toggleColumnVisibility = (index: number) => {
+  if (!selectedNavId.value) return
+  const config = configStore.page1Configs[selectedNavId.value]
+  if (config) {
+    const col = config.tableArea.columns[index]
+    col.visible = col.visible === false ? true : false
+  }
+}
+
+// 切换操作按钮可见性
+const toggleActionVisibility = (index: number) => {
+  if (!selectedNavId.value) return
+  const config = configStore.page1Configs[selectedNavId.value]
+  if (config?.actions) {
+    const action = config.actions[index]
+    action.visible = action.visible === false ? true : false
+  }
 }
 
 // ============================================
@@ -552,45 +687,87 @@ const handleSaveToSource = async () => {
           <Layers class="w-4 h-4" />
           导航列表
         </h3>
-        <span class="text-xs text-muted-foreground">点击配置页面</span>
+        <Button variant="ghost" size="sm" class="h-6 w-6 p-0" @click="openAddMainNavDialog">
+           <Plus class="w-4 h-4" />
+        </Button>
       </div>
       <div class="flex-1 overflow-auto">
-        <div class="p-2 space-y-1">
-          <div
-            v-for="item in allSubNavItems"
-            :key="item.subItem.id"
-            class="p-3 rounded-lg cursor-pointer transition-all flex items-center gap-3 border-l-2"
-            :class="selectedNavId === item.subItem.id 
-              ? 'bg-primary/10 border-l-primary' 
-              : 'bg-transparent border-l-transparent hover:bg-muted'"
-            @click="handleSelectNav(item.subItem.id)"
-          >
-            <Avatar class="h-9 w-9">
-              <AvatarFallback 
-                :class="selectedNavId === item.subItem.id ? 'bg-primary text-white' : 'bg-muted'"
-                class="text-sm font-medium"
-              >
-                {{ item.subItem.title[0] }}
-              </AvatarFallback>
-            </Avatar>
-            <div class="flex-1 min-w-0">
-              <div class="font-medium text-sm truncate">{{ item.subItem.title }}</div>
-              <div class="text-xs text-muted-foreground truncate">ID: {{ item.subItem.id }}</div>
-            </div>
-            <Badge 
-              v-if="item.subItem.template"
-              variant="secondary"
-              class="text-xs"
-            >
-              {{ item.subItem.template }}
-            </Badge>
-            <Badge 
-              v-else
-              variant="outline"
-              class="text-xs text-muted-foreground"
-            >
-              无模板
-            </Badge>
+        <div class="p-2 space-y-4">
+          <!-- Iterate Groups -->
+          <div v-for="(group, groupIndex) in configStore.navGroups" :key="groupIndex">
+             <!-- Group Label (Optional, usually Platform) -->
+             <div v-if="group.label && group.showLabel" class="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {{ group.label }}
+             </div>
+
+             <div class="space-y-2">
+                <!-- Iterate Main Items -->
+                <div v-for="mainItem in group.items" :key="mainItem.id" class="border rounded-lg overflow-hidden">
+                  <!-- Main Item Header - Clickable to expand/collapse -->
+                  <div 
+                    class="px-3 py-2 text-sm font-medium text-foreground flex items-center gap-2 bg-muted/50 cursor-pointer hover:bg-muted transition-colors"
+                    @click="toggleMainItemExpand(mainItem.id)"
+                  >
+                     <!-- Expand/Collapse Icon -->
+                     <ChevronDown v-if="expandedMainItems[mainItem.id]" class="w-4 h-4 text-muted-foreground shrink-0"/>
+                     <ChevronRight v-else class="w-4 h-4 text-muted-foreground shrink-0"/>
+                     <component :is="mainItem.icon" v-if="mainItem.icon" class="w-4 h-4 text-muted-foreground shrink-0"/>
+                     <span class="flex-1 truncate">{{ mainItem.title }}</span>
+                     <!-- Add Sub Item Button -->
+                     <Button 
+                       variant="ghost" 
+                       size="sm" 
+                       class="h-6 w-6 p-0 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                       @click.stop="openAddSubNavDialog(groupIndex, mainItem.id)"
+                     >
+                       <Plus class="w-3.5 h-3.5"/>
+                     </Button>
+                  </div>
+                  
+                  <!-- Sub Items - Collapsible -->
+                  <div v-show="expandedMainItems[mainItem.id]">
+                    <draggable
+                      v-model="mainItem.items"
+                      tag="div"
+                      class="space-y-0.5 p-1 min-h-[10px]"
+                      item-key="id"
+                      :animation="200"
+                      group="subItems"
+                      handle=".drag-handle"
+                    >
+                      <template #item="{ element: subItem }">
+                         <div
+                          class="px-3 py-2 rounded-md cursor-pointer transition-all flex items-center justify-between group/item"
+                          :class="selectedNavId === subItem.id 
+                            ? 'bg-primary/10 text-primary font-medium' 
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                          @click="handleSelectNav(subItem.id)"
+                         >
+                           <div class="flex-1 min-w-0 flex items-center gap-2">
+                              <!-- Drag Handle (visible on hover) -->
+                              <GripVertical class="w-3 h-3 text-muted-foreground opacity-0 group-hover/item:opacity-50 cursor-grab drag-handle" />
+                              <span class="truncate text-sm">{{ subItem.title }}</span>
+                           </div>
+                           
+                           <div class="flex items-center gap-1 shrink-0">
+                             <Badge 
+                               v-if="subItem.template"
+                               variant="secondary"
+                               class="text-[10px] h-5 px-1.5 bg-background/50 group-hover/item:bg-background"
+                             >
+                               {{ subItem.template }}
+                             </Badge>
+                           </div>
+                         </div>
+                      </template>
+                    </draggable>
+                    <!-- Empty state -->
+                    <div v-if="!mainItem.items?.length" class="px-3 py-2 text-xs text-muted-foreground text-center">
+                      暂无子导航
+                    </div>
+                  </div>
+                </div>
+             </div>
           </div>
         </div>
       </div>
@@ -621,6 +798,15 @@ const handleSaveToSource = async () => {
               <Button variant="outline" size="sm" @click="openEditNavDialog">
                 <Pencil class="w-4 h-4 mr-1" />
                 编辑导航
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                class="text-destructive hover:text-destructive hover:bg-destructive/10"
+                @click="handleDeleteCurrentNav"
+              >
+                <Trash2 class="w-4 h-4 mr-1" />
+                删除导航
               </Button>
             </div>
           </div>
@@ -710,6 +896,17 @@ const handleSaveToSource = async () => {
                             </td>
                             <td class="p-2">
                               <div class="flex gap-1 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0"
+                                  :class="filter.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                  @click="toggleFilterVisibility(index)"
+                                  :title="filter.visible === false ? '点击显示' : '点击隐藏'"
+                                >
+                                  <EyeOff v-if="filter.visible === false" class="w-3 h-3" />
+                                  <Eye v-else class="w-3 h-3" />
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -828,6 +1025,17 @@ const handleSaveToSource = async () => {
                                   variant="ghost"
                                   size="sm"
                                   class="h-7 w-7 p-0"
+                                  :class="col.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                  @click="toggleColumnVisibility(index)"
+                                  :title="col.visible === false ? '点击显示' : '点击隐藏'"
+                                >
+                                  <EyeOff v-if="col.visible === false" class="w-3 h-3" />
+                                  <Eye v-else class="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0"
                                   @click="openEditColumnDialog(index)"
                                 >
                                   <Pencil class="w-3 h-3" />
@@ -896,6 +1104,17 @@ const handleSaveToSource = async () => {
                           </td>
                           <td class="p-2">
                             <div class="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 w-7 p-0"
+                                :class="action.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                @click="toggleActionVisibility(index)"
+                                :title="action.visible === false ? '点击显示' : '点击隐藏'"
+                              >
+                                <EyeOff v-if="action.visible === false" class="w-3 h-3" />
+                                <Eye v-else class="w-3 h-3" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1131,6 +1350,50 @@ const handleSaveToSource = async () => {
       <DialogFooter>
         <Button variant="outline" @click="closeActionDialog">取消</Button>
         <Button @click="handleSaveAction">{{ editingActionIndex !== null ? '保存' : '添加' }}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Add Sub Nav Dialog -->
+  <Dialog v-model:open="addSubNavDialogOpen">
+    <DialogContent class="sm:max-w-[400px]">
+      <DialogHeader>
+        <DialogTitle>添加子导航</DialogTitle>
+        <DialogDescription>
+          添加一个新的子导航项
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4 py-4">
+        <div class="space-y-2">
+          <label class="text-sm font-medium">标题</label>
+          <Input v-model="addSubNavForm.title" placeholder="请输入导航标题" />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" @click="closeAddSubNavDialog">取消</Button>
+        <Button @click="handleAddSubNav">添加</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Add Main Nav Dialog -->
+  <Dialog v-model:open="addMainNavDialogOpen">
+    <DialogContent class="sm:max-w-[400px]">
+      <DialogHeader>
+        <DialogTitle>添加一级导航</DialogTitle>
+        <DialogDescription>
+          添加一个新的主导航项
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4 py-4">
+        <div class="space-y-2">
+          <label class="text-sm font-medium">标题</label>
+          <Input v-model="addMainNavForm.title" placeholder="请输入导航标题" />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" @click="closeAddMainNavDialog">取消</Button>
+        <Button @click="handleAddMainNav">添加</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

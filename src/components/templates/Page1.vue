@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { FilterInput, FilterSelect, FilterDateRange, FilterTreeSelect, type TreeNode } from '@/components/ui/filter'
+import { FilterInput, FilterSelect, FilterDateRange, FilterTreeSelect } from '@/components/ui/filter'
 import { useNavigation } from '@/config/sidebar'
 import { useConfigStore, type Page1Config } from '@/stores/configStore'
 
@@ -88,6 +88,21 @@ const paginatedData = computed(() => {
   return filteredData.value.slice(start, start + pageSize)
 })
 const totalPages = computed(() => Math.ceil(filteredData.value.length / pageSize) || 1)
+
+// 可见的筛选项
+const visibleFilters = computed(() => {
+  return pageConfig.value?.filterArea.filters.filter(f => f.visible !== false) || []
+})
+
+// 可见的列
+const visibleColumns = computed(() => {
+  return pageConfig.value?.tableArea.columns.filter(c => c.visible !== false) || []
+})
+
+// 可见的操作按钮
+const visibleActions = computed(() => {
+  return pageConfig.value?.actions?.filter(a => a.visible !== false) || []
+})
 
 // 全选状态
 const isAllSelected = computed(() => {
@@ -182,7 +197,7 @@ const getStatusClass = (status: string) => {
               gap: pageConfig.filterArea.gap,
             }"
           >
-            <template v-for="config in pageConfig.filterArea.filters" :key="config.key">
+            <template v-for="config in visibleFilters" :key="config.key">
               <!-- 输入框类型 -->
               <FilterInput
                 v-if="config.type === 'input'"
@@ -218,20 +233,24 @@ const getStatusClass = (status: string) => {
           </div>
 
           <!-- 底部操作按钮 -->
-          <div class="flex items-center gap-3 pt-2 border-t">
-            <template v-for="(action, index) in pageConfig.actions" :key="action.key">
-              <!-- 分隔符（在第2个按钮后添加） -->
-              <div v-if="index === 2" class="w-px h-6 bg-border mx-1"></div>
-              <Button 
-                :variant="action.variant ?? 'default'"
-                class="h-9 px-5"
-                :class="action.className"
-              >
-                {{ action.label }}
-              </Button>
-            </template>
-            <div class="ml-auto text-xs text-muted-foreground">
+          <!-- 底部操作按钮 -->
+          <div class="flex items-center justify-between pt-2 border-t">
+            <div class="text-xs text-muted-foreground">
               已选择 <span class="font-semibold text-foreground">{{ selectedRows.length }}</span> 条记录
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <template v-for="(action, index) in visibleActions" :key="action.key">
+                <!-- 分隔符（在第2个按钮后添加） -->
+                <div v-if="index === 2" class="w-px h-6 bg-border mx-1"></div>
+                <Button 
+                  :variant="action.variant ?? 'default'"
+                  class="h-9 px-5"
+                  :class="action.className"
+                >
+                  {{ action.label }}
+                </Button>
+              </template>
             </div>
           </div>
         </div>
@@ -265,7 +284,7 @@ const getStatusClass = (status: string) => {
                 </TableHead>
                 <!-- 数据列 -->
                 <TableHead 
-                  v-for="col in pageConfig.tableArea.columns" 
+                  v-for="col in visibleColumns" 
                   :key="col.key"
                   class="h-11 font-semibold border-r last:border-r-0"
                   :class="{
@@ -305,7 +324,7 @@ const getStatusClass = (status: string) => {
                 </TableCell>
                 <!-- 数据列 -->
                 <TableCell 
-                  v-for="col in pageConfig.tableArea.columns" 
+                  v-for="col in visibleColumns" 
                   :key="col.key"
                   class="py-3 border-r last:border-r-0"
                   :class="{
