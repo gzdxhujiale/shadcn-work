@@ -75,6 +75,17 @@ const columnForm = ref({
   type: 'text' as 'text' | 'badge' | 'status-badge',
 })
 
+// Action Button Dialog State
+const actionDialogOpen = ref(false)
+const editingActionIndex = ref<number | null>(null)
+
+const actionForm = ref({
+  key: '',
+  label: '',
+  variant: 'default' as 'default' | 'outline' | 'secondary' | 'ghost',
+  className: ''
+})
+
 // 获取所有子导航项（扁平化）
 const allSubNavItems = computed(() => {
   const items: { groupIndex: number; mainItemId: string; subItem: NavSubItem }[] = []
@@ -356,6 +367,73 @@ const handleUpdateTableArea = (key: string, value: any) => {
 }
 
 // ============================================
+// Action Button CRUD
+// ============================================
+
+const openAddActionDialog = () => {
+  editingActionIndex.value = null
+  actionForm.value = { key: '', label: '', variant: 'default', className: '' }
+  actionDialogOpen.value = true
+}
+
+const openEditActionDialog = (index: number) => {
+  const config = configStore.page1Configs[selectedNavId.value!]
+  if (config?.actions) {
+    const action = config.actions[index]
+    editingActionIndex.value = index
+    actionForm.value = {
+      key: action.key,
+      label: action.label,
+      variant: action.variant || 'default',
+      className: action.className || ''
+    }
+    actionDialogOpen.value = true
+  }
+}
+
+const closeActionDialog = () => {
+  actionDialogOpen.value = false
+  editingActionIndex.value = null
+}
+
+const handleSaveAction = () => {
+  if (selectedNavId.value && actionForm.value.key && actionForm.value.label) {
+    const config = configStore.page1Configs[selectedNavId.value]
+    if (config) {
+      if (!config.actions) config.actions = []
+      
+      const newAction = {
+        key: actionForm.value.key,
+        label: actionForm.value.label,
+        variant: actionForm.value.variant === 'default' ? undefined : actionForm.value.variant,
+        className: actionForm.value.className || undefined
+      }
+      
+      if (editingActionIndex.value !== null) {
+        config.actions[editingActionIndex.value] = newAction
+      } else {
+        config.actions.push(newAction)
+      }
+    }
+    closeActionDialog()
+  }
+}
+
+const handleDeleteAction = (index: number) => {
+  if (!selectedNavId.value) return
+  showConfirm(
+    '确定删除？',
+    '确定要删除这个操作按钮吗？',
+    () => {
+      const config = configStore.page1Configs[selectedNavId.value!]
+      if (config?.actions) {
+        config.actions.splice(index, 1)
+      }
+    }
+  )
+}
+
+// ============================================
 // 确认对话框辅助函数 (Issue 7: 替代 confirm())
 // ============================================
 
@@ -399,6 +477,16 @@ const columnList = computed({
   set: (val) => {
     if (currentPageConfig.value) {
       currentPageConfig.value.tableArea.columns = val
+    }
+  }
+})
+
+// 操作按钮列表的本地副本用于拖拽
+const actionList = computed({
+  get: () => currentPageConfig.value?.actions || [],
+  set: (val) => {
+    if (currentPageConfig.value) {
+      currentPageConfig.value.actions = val
     }
   }
 })
@@ -765,6 +853,77 @@ const handleSaveToSource = async () => {
                 </div>
               </div>
 
+              <!-- Action Buttons Configuration -->
+              <div class="space-y-4 mt-6">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold">操作按钮配置</h4>
+                  <Button variant="outline" size="sm" class="h-8" @click="openAddActionDialog">
+                    <Plus class="w-4 h-4 mr-1" />
+                    添加按钮
+                  </Button>
+                </div>
+                
+                <!-- Action List -->
+                <div class="border rounded-md" v-if="currentPageConfig.actions && currentPageConfig.actions.length > 0">
+                  <table class="w-full">
+                    <thead>
+                      <tr class="border-b bg-muted/50">
+                        <th class="w-8 p-2"></th>
+                        <th class="text-left p-2 text-sm font-medium">标签</th>
+                        <th class="text-left p-2 text-sm font-medium">Key</th>
+                        <th class="text-left p-2 text-sm font-medium">样式</th>
+                        <th class="text-right p-2 text-sm font-medium w-20">操作</th>
+                      </tr>
+                    </thead>
+                    <draggable 
+                      v-model="actionList"
+                      tag="tbody"
+                      item-key="key"
+                      handle=".drag-handle"
+                      :animation="200"
+                    >
+                      <template #item="{ element: action, index }">
+                        <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                          <td class="p-2">
+                            <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                          </td>
+                          <td class="p-2 text-sm font-medium">{{ action.label }}</td>
+                          <td class="p-2">
+                            <code class="text-xs text-muted-foreground">{{ action.key }}</code>
+                          </td>
+                          <td class="p-2">
+                            <Badge variant="outline" class="text-xs">{{ action.variant || 'default' }}</Badge>
+                          </td>
+                          <td class="p-2">
+                            <div class="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 w-7 p-0"
+                                @click="openEditActionDialog(index)"
+                              >
+                                <Pencil class="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                @click="handleDeleteAction(index)"
+                              >
+                                <Trash2 class="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      </template>
+                    </draggable>
+                  </table>
+                </div>
+                <div v-if="!currentPageConfig.actions || currentPageConfig.actions.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
+                  暂无操作按钮
+                </div>
+              </div>
+
             </template>
           </div>
       </div>
@@ -915,6 +1074,66 @@ const handleSaveToSource = async () => {
     </DialogContent>
   </Dialog>
 
+  <!-- 添加/编辑操作按钮对话框 -->
+  <Dialog v-model:open="actionDialogOpen">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ editingActionIndex !== null ? '编辑操作按钮' : '添加操作按钮' }}</DialogTitle>
+        <DialogDescription>{{ editingActionIndex !== null ? '修改操作按钮配置' : '添加新的操作按钮' }}</DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4 py-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Key</label>
+            <Input v-model="actionForm.key" placeholder="如 search" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">按钮文本</label>
+            <Input v-model="actionForm.label" placeholder="如 查询" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-medium">样式</label>
+            <Select v-model="actionForm.variant">
+              <SelectTrigger class="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default (蓝色)</SelectItem>
+                <SelectItem value="outline">Outline (边框)</SelectItem>
+                <SelectItem value="secondary">Secondary (灰色)</SelectItem>
+                <SelectItem value="ghost">Ghost (透明)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">自定义样式类</label>
+            <Input v-model="actionForm.className" placeholder="可选，如 bg-emerald-50" />
+          </div>
+        </div>
+        
+        <!-- Preview Section -->
+        <div class="space-y-2 pt-2 border-t">
+          <label class="text-sm font-medium text-muted-foreground">预览</label>
+          <div class="flex items-center gap-3 p-3 rounded-md bg-muted/30">
+            <Button 
+              :variant="actionForm.variant"
+              class="h-9 px-5"
+              :class="actionForm.className"
+            >
+              {{ actionForm.label || '按钮文本' }}
+            </Button>
+            <span class="text-xs text-muted-foreground">← 按钮实际样式</span>
+          </div>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" @click="closeActionDialog">取消</Button>
+        <Button @click="handleSaveAction">{{ editingActionIndex !== null ? '保存' : '添加' }}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 
   <!-- Issue 7: 确认对话框 (替代 confirm()) -->
   <AlertDialog v-model:open="confirmDialogOpen">
