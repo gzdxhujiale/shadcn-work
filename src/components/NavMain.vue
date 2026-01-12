@@ -28,6 +28,7 @@ const props = withDefaults(
       isActive?: boolean
       isOpen?: boolean
       items?: {
+        id: string
         title: string
         url: string
       }[]
@@ -43,8 +44,8 @@ const props = withDefaults(
 const { currentSubNav, setNavigation, setDetailTitle } = useNavigation()
 
 // 处理导航点击
-const handleNavClick = (mainNav: string, subNav: string) => {
-  setNavigation(mainNav, subNav)
+const handleNavClick = (mainNav: string, subNav: string, navId: string) => {
+  setNavigation(mainNav, subNav, navId)
   setDetailTitle(null) // 切换页面时清除第三级面包屑
 }
 
@@ -86,7 +87,7 @@ const hasActiveChild = (item: any) => {
               <SidebarMenuSubItem v-for="subItem in item.items" :key="subItem.title">
                 <SidebarMenuSubButton 
                   as-child 
-                  @click="handleNavClick(item.title, subItem.title)"
+                  @click="handleNavClick(item.title, subItem.title, subItem.id)"
                   :class="{ 
                     'bg-primary/10 text-primary font-medium': isSubItemActive(subItem.title)
                   }"

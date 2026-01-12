@@ -145,3 +145,79 @@ A: 由于 `filters` 同时存储字符串和日期对象，有时在模板中直
 - `getStringValue(key)`：用于 Input 和 Select。
 - `getDateRangeValue(key)`：用于 DateRange。
 - `setDateRangeValue(key, val)` / `setStringValue(key, val)`：用于更新值。
+
+---
+
+## 2026-01-12 更新：低代码配置与新型筛选组件
+
+本次更新引入了可视化的配置管理页面 (`Settings.vue`) 和新的树形选择组件 (`FilterTreeSelect.vue`)，大大简化了页面开发流程。
+
+### 1. 使用 Settings 页面进行可视化配置
+
+现在，您可以直接在运行时的 `Settings` 页面（侧边栏配置入口）进行页面的配置，而无需手动编写 TypeScript 代码。
+
+**工作流：**
+
+1.  **可视化编辑**：在 Settings 页面选择对应的导航项。
+2.  **实时预览**：添加/编辑筛选条件、修改表格列配置，页面会自动保存到本地存储 (`localStorage`) 并实时生效。
+3.  **导出代码**：配置满意后，点击页面顶部面包屑区域的 **"导出配置文件"** 按钮。
+4.  **替换源码**：下载生成好的 `page1.ts` 文件（或复制内容），替换项目中的 `src/config/page1.ts` 文件。这确保了配置的持久化和版本控制。
+
+### 2. 新增 TreeSelect (树形下拉框) 筛选类型
+
+我们新增了 `tree-select` 类型，用于处理层级数据的筛选。
+
+#### 配置结构 (`FilterConfig`)
+
+在 `FilterConfig` 接口中，新增了 `treeOptions` 字段：
+
+```typescript
+export interface TreeNode {
+    value: string
+    label: string
+    children?: TreeNode[]
+}
+
+export interface FilterConfig {
+    // ...
+    type: 'input' | 'select' | 'date-range' | 'tree-select' // 新增 tree-select
+    treeOptions?: TreeNode[]                                // 仅用于 tree-select 类型
+}
+```
+
+#### 在 Settings 中配置 TreeSelect
+
+在添加/编辑筛选项时：
+1.  **类型**选择 "树形下拉框"。
+2.  **树形选项配置 (JSON)**：在文本框中输入符合 `TreeNode[]` 结构的 JSON 数据。
+
+**JSON 示例：**
+```json
+[
+  {
+    "value": "1",
+    "label": "一级部门 A",
+    "children": [
+      {
+        "value": "1-1",
+        "label": "二级部门 A-1",
+        "children": []
+      }
+    ]
+  },
+  {
+    "value": "2",
+    "label": "一级部门 B"
+  }
+]
+```
+
+### 3. 组件实现细节
+
+*   **FilterTreeSelect.vue**：基于 `Popover` 实现，支持无限层级递归渲染，但建议层级不要超过 3 层以保证体验。
+*   **TreeSelect UI**：支持节点展开/折叠，选中状态会有 Check 图标提示。如果不选择，默认显示 Placeholder 或第一个节点的 Label（逻辑可定制）。
+
+### 4. 数据流变动
+
+*   **ConfigStore**：现在全权管理页面配置，支持从 `localStorage` 恢复状态。
+*   **Page1.vue**：完全响应式地根据 `ConfigStore` 中的配置渲染 UI，包括动态加载 `FilterTreeSelect` 组件。

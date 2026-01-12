@@ -16,8 +16,9 @@ export interface NavSubItem {
     title: string
     url: string
     badge?: string // 可选徽章
-    component?: string // 对应的页面组件名称，未指定则显示占位页
+    template?: 'Page1' | 'Page2' | '' // 使用的页面模板
 }
+
 
 export interface NavMainItem {
     id: string
@@ -152,17 +153,17 @@ export const defaultSidebarConfig: SidebarConfig = {
                     icon: SquareTerminal,
                     isOpen: true, // 设置为 true 则默认展开
                     items: [
-                        { id: '1', title: '提现', url: '#', component: 'Withdraw' },
-                        { id: '2', title: '提现币商代发薪资', url: '#' },
-                        { id: '3', title: '公会薪资转账', url: '#' },
-                        { id: '4', title: '提现黑名单', url: '#' },
-                        { id: '5', title: '离线打款', url: '#' },
-                        { id: '6', title: '在线打款', url: '#' },
-                        { id: '7', title: '大款订单', url: '#' },
-                        { id: '8', title: '结算核减', url: '#' },
-                        { id: '9', title: 'payonner账户管理', url: '#' },
-                        { id: '10', title: '账号黑名单', url: '#' },
-                        { id: '11', title: '稳定币白名单', url: '#' },
+                        { id: '1', title: '提现', url: '#', template: 'Page1' },
+                        { id: '2', title: '提现币商代发薪资', url: '#', template: 'Page1' },
+                        { id: '3', title: '公会薪资转账', url: '#', template: '' },
+                        { id: '4', title: '提现黑名单', url: '#', template: '' },
+                        { id: '5', title: '离线打款', url: '#', template: '' },
+                        { id: '6', title: '在线打款', url: '#', template: '' },
+                        { id: '7', title: '大款订单', url: '#', template: '' },
+                        { id: '8', title: '结算核减', url: '#', template: '' },
+                        { id: '9', title: 'payonner账户管理', url: '#', template: '' },
+                        { id: '10', title: '账号黑名单', url: '#', template: '' },
+                        { id: '11', title: '稳定币白名单', url: '#', template: '' },
                     ],
                 },
             ],
@@ -268,6 +269,7 @@ const firstSubNav = firstMainNav?.items?.[0]
 // 导航状态（模块级别的单例状态）
 const currentMainNav = ref(firstMainNav?.title ?? '')
 const currentSubNav = ref(firstSubNav?.title ?? '')
+const _currentNavId = ref(firstSubNav?.id ?? '')
 const detailTitle = ref<string | null>(null)
 
 /**
@@ -276,9 +278,23 @@ const detailTitle = ref<string | null>(null)
  */
 export function useNavigation() {
     // 设置当前导航
-    const setNavigation = (mainNav: string, subNav: string) => {
+    const setNavigation = (mainNav: string, subNav: string, navId?: string) => {
         currentMainNav.value = mainNav
         currentSubNav.value = subNav
+        if (navId) {
+            _currentNavId.value = navId
+        } else {
+            // 如果没有传 navId，尝试从配置中查找
+            for (const group of defaultSidebarConfig.navGroups) {
+                for (const mainItem of group.items) {
+                    const subItem = mainItem.items?.find(item => item.title === subNav)
+                    if (subItem) {
+                        _currentNavId.value = subItem.id
+                        return
+                    }
+                }
+            }
+        }
     }
 
     // 设置详情标题（用于第三级面包屑）
@@ -293,27 +309,45 @@ export function useNavigation() {
         detail: detailTitle.value,
     }))
 
-    // 计算当前页面组件名称 - 从配置中动态查找
-    const currentPage = computed(() => {
-        // 遍历所有导航组查找当前子导航对应的组件
+    // 当前导航项 ID
+    const currentNavId = computed(() => _currentNavId.value)
+
+    // 计算当前页面模板 - 从配置中动态查找
+    const currentTemplate = computed(() => {
+        // 遍历所有导航组查找当前子导航对应的模板
         for (const group of defaultSidebarConfig.navGroups) {
             for (const mainItem of group.items) {
-                const subItem = mainItem.items?.find(item => item.title === currentSubNav.value)
-                if (subItem?.component) {
-                    return subItem.component
+                const subItem = mainItem.items?.find(item => item.id === _currentNavId.value)
+                if (subItem?.template) {
+                    return subItem.template
                 }
             }
         }
-        // 未配置 component 则返回子导航标题（会触发 PlaceholderPage）
+        // 未配置 template 则返回 undefined
+        return undefined
+    })
+
+    // 计算当前页面组件名称 - 保留兼容（如果有模板则返回模板名）
+    const currentPage = computed(() => {
+        // 特殊页面处理（如 Settings）
+        if (_currentNavId.value === 'settings') {
+            return 'Settings'
+        }
+        if (currentTemplate.value) {
+            return currentTemplate.value
+        }
+        // 未配置则返回子导航标题（会触发 PlaceholderPage）
         return currentSubNav.value
     })
 
     return {
         currentMainNav,
         currentSubNav,
+        currentNavId,
         detailTitle,
         breadcrumbs,
         currentPage,
+        currentTemplate,
         setNavigation,
         setDetailTitle,
     }

@@ -13,20 +13,24 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { useNavigation } from '@/config/sidebar'
+import { Toaster } from '@/components/ui/sonner'
+import "vue-sonner/style.css"
 
-// 导入页面组件
-import Withdraw from '@/components/pages/workspace/Withdraw.vue'
+// 导入页面模板
+import Page1 from '@/components/templates/Page1.vue'
 import PlaceholderPage from '@/components/pages/PlaceholderPage.vue'
+import Settings from '@/components/pages/Settings.vue'
 
 const { breadcrumbs, currentPage, setDetailTitle } = useNavigation()
 
-// 页面组件映射
+// 页面模板映射
 const pageComponents: Record<string, any> = {
-  Withdraw,
-  // 后续添加更多页面时，在此注册...
+  Page1,
+  Settings,
+  // Page2, // 后续添加更多模板时，在此注册...
 }
 
-// 当前显示的组件 - 未注册的页面显示占位组件
+// 当前显示的组件 - 未注册的模板显示占位组件
 const CurrentPageComponent = computed(() => pageComponents[currentPage.value] || PlaceholderPage)
 
 // 点击第二级面包屑返回列表
@@ -89,6 +93,7 @@ const handleSubNavClick = () => {
         </Transition>
       </div>
     </SidebarInset>
+    <Toaster />
   </SidebarProvider>
 </template>
 

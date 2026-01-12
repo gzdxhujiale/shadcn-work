@@ -5,7 +5,7 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
-  Sparkles,
+  Settings,
 } from "lucide-vue-next"
 
 import {
@@ -28,6 +28,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { useNavigation } from '@/config/sidebar'
 
 const props = defineProps<{
   user: {
@@ -38,6 +39,13 @@ const props = defineProps<{
 }>()
 
 const { isMobile } = useSidebar()
+const { setNavigation, setDetailTitle } = useNavigation()
+
+// 点击设置按钮
+const handleSettingsClick = () => {
+  setNavigation('系统', '配置设置', 'settings')
+  setDetailTitle(null)
+}
 </script>
 
 <template>
@@ -84,9 +92,9 @@ const { isMobile } = useSidebar()
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem>
-              <Sparkles />
-              Upgrade to Pro
+            <DropdownMenuItem @click="handleSettingsClick">
+              <Settings />
+              Upgrade for Setting
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />

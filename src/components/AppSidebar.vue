@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import type { SidebarProps } from '@/components/ui/sidebar'
 import { defaultSidebarConfig, type SidebarConfig } from '@/config/sidebar'
+import { useConfigStore } from '@/stores/configStore'
 
 import NavMain from '@/components/NavMain.vue'
 import NavProjects from '@/components/NavProjects.vue'
@@ -25,25 +26,31 @@ const props = withDefaults(defineProps<AppSidebarProps>(), {
   collapsible: 'icon',
 })
 
-// 使用传入的配置或默认配置
+// 使用 Pinia store
+const configStore = useConfigStore()
+
+// 使用传入的配置或默认配置（用于非 navGroups 的部分）
 const sidebarConfig = props.config ?? defaultSidebarConfig
 
 // 当前选中的团队
 const activeTeam = ref(sidebarConfig.teams[0])
 
-// 根据权限过滤导航菜单
+// 根据权限过滤导航菜单 - 从 Pinia store 读取
 const filteredNavGroups = computed(() => {
   const team = activeTeam.value
-  if (!team || !team.permissions) return sidebarConfig.navGroups
+  // 使用 store 的 navGroups
+  const navGroups = configStore.navGroups
+  
+  if (!team || !team.permissions) return navGroups
 
   const { navMain, navItems } = team.permissions
 
   // 如果 navMain 是 'all'，显示所有，但仍需检查 navItems 的细粒度控制
   if (navMain === 'all' && !navItems) {
-    return sidebarConfig.navGroups
+    return navGroups
   }
 
-  return sidebarConfig.navGroups.map(group => {
+  return navGroups.map(group => {
     // 过滤组内的一级菜单
     const filteredItems = group.items.filter(item => {
       // 1. 检查一级菜单权限
