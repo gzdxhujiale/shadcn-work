@@ -248,6 +248,9 @@ git remote remove origin
 
 # 2. 再创建新仓库并设置 origin
 gh repo create shadcn-work --public --source=. --remote=origin && git push -u origin main
+
+# 3. 提交代码
+git add . && git commit -m "" && git push origin main
 ```
 
 ---

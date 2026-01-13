@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
-import { Layers, Plus, Pencil, Trash2, Settings2, Save, FileCode, GripVertical, Info, ChevronRight, ChevronDown, Eye, EyeOff, Square } from 'lucide-vue-next'
+import { Layers, Plus, Pencil, Trash2, Settings2, Save, FileCode, GripVertical, Info, ChevronRight, ChevronDown, Eye, EyeOff, Square, Download, Upload, FileDown } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -762,6 +762,83 @@ const handleSaveToSource = async () => {
     }
   )
 }
+
+// ============================================
+// 配置导入/导出功能
+// ============================================
+
+// 隐藏的文件输入元素引用
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// 下载 JSON 文件
+const downloadJson = (data: object, filename: string) => {
+  const jsonStr = JSON.stringify(data, null, 2)
+  const blob = new Blob([jsonStr], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// 模板下载
+const handleDownloadTemplate = () => {
+  const template = configStore.getTemplateConfig()
+  downloadJson(template, 'config-template.json')
+  toast.success('模板下载成功', {
+    description: '请按照模板格式填写配置后导入'
+  })
+}
+
+// 导出配置
+const handleExportConfig = () => {
+  const exportData = configStore.exportFullConfig()
+  const filename = `settings-config-${new Date().toISOString().slice(0, 10)}.json`
+  downloadJson(exportData, filename)
+  toast.success('配置导出成功', {
+    description: `已保存为 ${filename}`
+  })
+}
+
+// 导入配置
+const handleImportConfig = () => {
+  fileInputRef.value?.click()
+}
+
+// 处理文件选择
+const handleFileSelected = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target?.result as string)
+      const result = configStore.importFullConfig(data)
+      if (result.success) {
+        toast.success('导入成功', {
+          description: result.message
+        })
+      } else {
+        toast.error('导入失败', {
+          description: result.message
+        })
+      }
+    } catch (err) {
+      toast.error('导入失败', {
+        description: '无效的 JSON 文件格式'
+      })
+    }
+  }
+  reader.readAsText(file)
+  
+  // 清空 input 以便重复选择同一文件
+  input.value = ''
+}
 </script>
 
 <template>
@@ -769,22 +846,48 @@ const handleSaveToSource = async () => {
     <!-- Teleport 到面包屑操作区 -->
     <Teleport to="#breadcrumb-actions" defer>
       <div class="flex items-center gap-2">
+        <!-- 导入/导出按钮 -->
+        <Button variant="ghost" size="sm" @click="handleDownloadTemplate">
+          <FileDown class="w-4 h-4 mr-1" />
+          模板下载
+        </Button>
+        <Button variant="ghost" size="sm" @click="handleImportConfig">
+          <Upload class="w-4 h-4 mr-1" />
+          导入
+        </Button>
+        <Button variant="ghost" size="sm" @click="handleExportConfig">
+          <Download class="w-4 h-4 mr-1" />
+          导出
+        </Button>
+        
+        <div class="w-px h-4 bg-border mx-1"></div>
+        
         <Button 
           v-if="currentPageConfig"
-          variant="destructive" 
+          variant="ghost" 
           size="sm" 
+          class="text-destructive hover:text-destructive hover:bg-destructive/10"
           @click="handleDeletePageConfig"
           :disabled="isSaving"
         >
           <Trash2 class="w-4 h-4 mr-2" />
           重置页面
         </Button>
-        <Button variant="default" size="sm" @click="handleSaveToSource" :disabled="isSaving">
+        <Button variant="ghost" size="sm" @click="handleSaveToSource" :disabled="isSaving">
           <Save class="w-4 h-4 mr-2" />
           <span v-if="isSaving">保存中...</span>
           <span v-else>写入源码</span>
         </Button>
       </div>
+      
+      <!-- 隐藏的文件输入 -->
+      <input 
+        ref="fileInputRef"
+        type="file" 
+        accept=".json"
+        class="hidden"
+        @change="handleFileSelected"
+      />
     </Teleport>
     
     <div class="h-full flex overflow-hidden">

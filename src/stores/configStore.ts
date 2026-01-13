@@ -738,6 +738,220 @@ export function getPage1Config(navId: string): Page1Config | undefined {
         return code
     }
 
+    // ============================================
+    // 导入/导出配置 (JSON 格式)
+    // ============================================
+
+    interface ExportData {
+        version: string
+        exportedAt: string
+        navGroups: Array<{
+            label: string
+            showLabel?: boolean
+            items: Array<{
+                id: string
+                title: string
+                isOpen?: boolean
+                items?: Array<{
+                    id: string
+                    title: string
+                    url?: string
+                    template?: string
+                }>
+            }>
+        }>
+        pageConfigs: Record<string, Omit<Page1Config, 'mockData'>>
+    }
+
+    /**
+     * 获取模板配置（供下载）
+     */
+    function getTemplateConfig(): ExportData {
+        return {
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            navGroups: [
+                {
+                    label: '平台',
+                    showLabel: false,
+                    items: [
+                        {
+                            id: 'example-main',
+                            title: '示例主导航',
+                            isOpen: true,
+                            items: [
+                                { id: 'example-1', title: '示例页面1', url: '#', template: 'Page1' },
+                                { id: 'example-2', title: '示例页面2', url: '#', template: 'Page1' }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            pageConfigs: {
+                'example-1': {
+                    filterArea: {
+                        columns: 4,
+                        gap: '16px',
+                        filters: [
+                            { key: 'keyword', type: 'input', label: '关键词', placeholder: '请输入关键词', defaultValue: '' },
+                            { key: 'status', type: 'select', label: '状态', defaultValue: '全部', options: ['全部', '待审核', '已通过', '已拒绝'] }
+                        ]
+                    },
+                    actionsArea: {
+                        show: true,
+                        buttons: [
+                            { key: 'search', label: '查询', variant: 'outline' },
+                            { key: 'reset', label: '重置', variant: 'outline' }
+                        ]
+                    },
+                    cardArea: {
+                        show: false,
+                        columns: 4,
+                        gap: '16px',
+                        cards: []
+                    },
+                    tableArea: {
+                        height: '500px',
+                        scrollX: true,
+                        scrollY: true,
+                        showCheckbox: true,
+                        fixedLayout: true,
+                        columns: [
+                            { key: 'id', label: 'ID', width: '80px' },
+                            { key: 'name', label: '名称', width: '150px' }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 导出完整配置
+     */
+    function exportFullConfig(): ExportData {
+        // 构建导航组数据（不包含 icon 等不可序列化的属性）
+        const exportNavGroups = navGroups.value.map(group => ({
+            label: group.label,
+            showLabel: group.showLabel,
+            items: group.items.map(mainItem => ({
+                id: mainItem.id,
+                title: mainItem.title,
+                isOpen: mainItem.isOpen,
+                items: mainItem.items?.map(subItem => ({
+                    id: subItem.id,
+                    title: subItem.title,
+                    url: subItem.url,
+                    template: subItem.template
+                }))
+            }))
+        }))
+
+        // 构建页面配置（排除 mockData 函数）
+        const exportPageConfigs: Record<string, Omit<Page1Config, 'mockData'>> = {}
+        Object.entries(page1Configs.value).forEach(([navId, config]) => {
+            const { mockData: _, ...rest } = config as Page1Config & { mockData?: () => any[] }
+            exportPageConfigs[navId] = rest
+        })
+
+        return {
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            navGroups: exportNavGroups,
+            pageConfigs: exportPageConfigs
+        }
+    }
+
+    /**
+     * 导入配置
+     */
+    function importFullConfig(data: ExportData): { success: boolean; message: string } {
+        try {
+            // 验证版本
+            if (!data.version || !data.navGroups || !data.pageConfigs) {
+                return { success: false, message: '无效的配置格式' }
+            }
+
+            // 导入导航组
+            if (data.navGroups && Array.isArray(data.navGroups)) {
+                // 合并导航组：保留现有的，更新/添加导入的
+                data.navGroups.forEach(importGroup => {
+                    // 查找现有组（按 label 匹配）
+                    let existingGroup = navGroups.value.find(g => g.label === importGroup.label)
+
+                    if (!existingGroup) {
+                        // 新建组
+                        navGroups.value.push({
+                            label: importGroup.label,
+                            showLabel: importGroup.showLabel,
+                            items: []
+                        })
+                        existingGroup = navGroups.value[navGroups.value.length - 1]
+                    }
+
+                    // 合并主导航项
+                    importGroup.items?.forEach(importMainItem => {
+                        const existingMainItem = existingGroup!.items.find(i => i.id === importMainItem.id)
+
+                        if (existingMainItem) {
+                            // 更新现有项
+                            existingMainItem.title = importMainItem.title
+                            existingMainItem.isOpen = importMainItem.isOpen
+
+                            // 合并子导航项
+                            importMainItem.items?.forEach(importSubItem => {
+                                const existingSub = existingMainItem.items?.find(s => s.id === importSubItem.id)
+                                if (existingSub) {
+                                    existingSub.title = importSubItem.title
+                                    existingSub.url = importSubItem.url || '#'
+                                    existingSub.template = importSubItem.template as 'Page1' | 'Page2' | ''
+                                } else {
+                                    if (!existingMainItem.items) existingMainItem.items = []
+                                    existingMainItem.items.push({
+                                        id: importSubItem.id,
+                                        title: importSubItem.title,
+                                        url: importSubItem.url || '#',
+                                        template: importSubItem.template as 'Page1' | 'Page2' | ''
+                                    })
+                                }
+                            })
+                        } else {
+                            // 新建主导航项
+                            existingGroup!.items.push({
+                                id: importMainItem.id,
+                                title: importMainItem.title,
+                                url: '#',
+                                isOpen: importMainItem.isOpen,
+                                items: importMainItem.items?.map(sub => ({
+                                    id: sub.id,
+                                    title: sub.title,
+                                    url: sub.url || '#',
+                                    template: sub.template as 'Page1' | 'Page2' | ''
+                                }))
+                            })
+                        }
+                    })
+                })
+            }
+
+            // 导入页面配置
+            if (data.pageConfigs) {
+                Object.entries(data.pageConfigs).forEach(([navId, config]) => {
+                    // 合并或覆盖配置
+                    page1Configs.value[navId] = {
+                        ...config,
+                        mockData: mockDataFunctions.value[navId] || (() => [])
+                    } as Page1Config
+                })
+            }
+
+            return { success: true, message: '配置导入成功' }
+        } catch (e) {
+            console.error('Failed to import config:', e)
+            return { success: false, message: '导入失败: ' + (e as Error).message }
+        }
+    }
+
     return {
         // State
         navGroups,
@@ -762,5 +976,9 @@ export function getPage1Config(navId: string): Page1Config | undefined {
         resetToDefaults,
         generatePage1ConfigCode,
         saveToSourceFile,
+        // Import/Export Actions
+        getTemplateConfig,
+        exportFullConfig,
+        importFullConfig,
     }
 })
