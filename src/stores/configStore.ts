@@ -19,7 +19,10 @@ import type {
     TableAreaConfig,
     TableColumn,
     ActionButtonConfig,
-    TreeNode
+    ActionsAreaConfig,
+    TreeNode,
+    CardAreaConfig,
+    CardItemConfig
 } from '@/config/page1'
 
 // Re-export types for convenience if needed, or components should import from config files directly.
@@ -34,7 +37,10 @@ export type {
     TableAreaConfig,
     TableColumn,
     ActionButtonConfig,
-    TreeNode
+    ActionsAreaConfig,
+    TreeNode,
+    CardAreaConfig,
+    CardItemConfig
 }
 
 // ============================================
@@ -504,9 +510,31 @@ export interface FilterConfig {
  * 筛选区布局配置
  */
 export interface FilterAreaConfig {
+    show?: boolean     // 是否显示筛选区
     columns: number    // 每行显示的筛选项数量
     gap: string        // 筛选项之间的间距
     filters: FilterConfig[]
+}
+
+/**
+ * 卡片项配置
+ */
+export interface CardItemConfig {
+    key: string
+    title: string      // 卡片标题
+    data: string | number  // 卡片数据
+}
+
+/**
+ * 卡片区配置
+ */
+export interface CardAreaConfig {
+    show: boolean           // 是否显示卡片区
+    columns: number         // 每行显示的卡片数量
+    gap: string             // 卡片之间的间距
+    cardHeight?: string     // 卡片高度
+    cardWidth?: string      // 卡片宽度
+    cards: CardItemConfig[] // 卡片列表
 }
 
 /**
@@ -526,6 +554,7 @@ export interface TableColumn {
  * 表格区配置
  */
 export interface TableAreaConfig {
+    show?: boolean          // 是否显示表格区
     height?: string         // 表格容器高度
     scrollX?: boolean       // 是否启用横向滚动
     scrollY?: boolean       // 是否启用纵向滚动
@@ -546,6 +575,14 @@ export interface ActionButtonConfig {
 }
 
 /**
+ * 操作区配置
+ */
+export interface ActionsAreaConfig {
+    show?: boolean                  // 是否显示操作区
+    buttons: ActionButtonConfig[]   // 操作按钮列表
+}
+
+/**
  * Page1 模板完整配置
  */
 export interface Page1Config {
@@ -556,10 +593,12 @@ export interface Page1Config {
     }
     // 筛选区配置
     filterArea: FilterAreaConfig
+    // 操作区配置（可选）
+    actionsArea?: ActionsAreaConfig
+    // 卡片区配置（可选）
+    cardArea?: CardAreaConfig
     // 表格区配置
     tableArea: TableAreaConfig
-    // 操作按钮配置
-    actions?: ActionButtonConfig[]
     // 模拟数据生成函数
     mockData: () => any[]
 }
@@ -626,6 +665,38 @@ export const page1Configs: Record<string, Page1Config> = {
             code += `            ],\n`
             code += `        },\n`
 
+            // actionsArea
+            if (config.actionsArea) {
+                code += `        actionsArea: {\n`
+                if (config.actionsArea.show !== undefined) code += `            show: ${config.actionsArea.show},\n`
+                code += `            buttons: [\n`
+                config.actionsArea.buttons.forEach((action: ActionButtonConfig) => {
+                    code += `                { key: '${action.key}', label: '${action.label}'`
+                    if (action.variant) code += `, variant: '${action.variant}'`
+                    if (action.className) code += `,\n                    className: '${action.className}'`
+                    if (action.visible === false) code += `, visible: false`
+                    code += ` },\n`
+                })
+                code += `            ],\n`
+                code += `        },\n`
+            }
+
+            // cardArea
+            if (config.cardArea) {
+                code += `        cardArea: {\n`
+                code += `            show: ${config.cardArea.show},\n`
+                code += `            columns: ${config.cardArea.columns},\n`
+                code += `            gap: '${config.cardArea.gap}',\n`
+                if (config.cardArea.cardHeight) code += `            cardHeight: '${config.cardArea.cardHeight}',\n`
+                if (config.cardArea.cardWidth) code += `            cardWidth: '${config.cardArea.cardWidth}',\n`
+                code += `            cards: [\n`
+                config.cardArea.cards.forEach(card => {
+                    code += `                { key: '${card.key}', title: '${card.title}', data: '${card.data}' },\n`
+                })
+                code += `            ],\n`
+                code += `        },\n`
+            }
+
             // tableArea
             code += `        tableArea: {\n`
             if (config.tableArea.height) code += `            height: '${config.tableArea.height}',\n`
@@ -645,19 +716,6 @@ export const page1Configs: Record<string, Page1Config> = {
             })
             code += `            ],\n`
             code += `        },\n`
-
-            // actions
-            if (config.actions && config.actions.length > 0) {
-                code += `        actions: [\n`
-                config.actions.forEach(action => {
-                    code += `            { key: '${action.key}', label: '${action.label}'`
-                    if (action.variant) code += `, variant: '${action.variant}'`
-                    if (action.className) code += `,\n                className: '${action.className}'`
-                    if (action.visible === false) code += `, visible: false`
-                    code += ` },\n`
-                })
-                code += `        ],\n`
-            }
 
             // mockData placeholder
             code += `        mockData: () => {

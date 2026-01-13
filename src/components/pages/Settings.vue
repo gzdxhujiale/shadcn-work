@@ -104,6 +104,16 @@ const actionForm = ref({
   className: ''
 })
 
+// Card Dialog State
+const cardDialogOpen = ref(false)
+const editingCardIndex = ref<number | null>(null)
+
+const cardForm = ref({
+  key: '',
+  title: '',
+  data: ''
+})
+
 // 获取所有子导航项（扁平化）
 const allSubNavItems = computed(() => {
   const items: { groupIndex: number; mainItemId: string; subItem: NavSubItem }[] = []
@@ -415,8 +425,8 @@ const toggleColumnVisibility = (index: number) => {
 const toggleActionVisibility = (index: number) => {
   if (!selectedNavId.value) return
   const config = configStore.page1Configs[selectedNavId.value]
-  if (config?.actions) {
-    const action = config.actions[index]
+  if (config?.actionsArea?.buttons) {
+    const action = config.actionsArea.buttons[index]
     action.visible = action.visible === false ? true : false
   }
 }
@@ -513,8 +523,8 @@ const openAddActionDialog = () => {
 
 const openEditActionDialog = (index: number) => {
   const config = configStore.page1Configs[selectedNavId.value!]
-  if (config?.actions) {
-    const action = config.actions[index]
+  if (config?.actionsArea?.buttons) {
+    const action = config.actionsArea.buttons[index]
     editingActionIndex.value = index
     actionForm.value = {
       key: action.key,
@@ -535,7 +545,8 @@ const handleSaveAction = () => {
   if (selectedNavId.value && actionForm.value.key && actionForm.value.label) {
     const config = configStore.page1Configs[selectedNavId.value]
     if (config) {
-      if (!config.actions) config.actions = []
+      if (!config.actionsArea) config.actionsArea = { buttons: [] }
+      if (!config.actionsArea.buttons) config.actionsArea.buttons = []
       
       const newAction = {
         key: actionForm.value.key,
@@ -545,9 +556,9 @@ const handleSaveAction = () => {
       }
       
       if (editingActionIndex.value !== null) {
-        config.actions[editingActionIndex.value] = newAction
+        config.actionsArea.buttons[editingActionIndex.value] = newAction
       } else {
-        config.actions.push(newAction)
+        config.actionsArea.buttons.push(newAction)
       }
     }
     closeActionDialog()
@@ -561,11 +572,96 @@ const handleDeleteAction = (index: number) => {
     '确定要删除这个操作按钮吗？',
     () => {
       const config = configStore.page1Configs[selectedNavId.value!]
-      if (config?.actions) {
-        config.actions.splice(index, 1)
+      if (config?.actionsArea?.buttons) {
+        config.actionsArea.buttons.splice(index, 1)
       }
     }
   )
+}
+
+// ============================================
+// Card Config Actions
+// ============================================
+
+const openAddCardDialog = () => {
+  editingCardIndex.value = null
+  cardForm.value = { key: '', title: '', data: '' }
+  cardDialogOpen.value = true
+}
+
+const openEditCardDialog = (index: number) => {
+  const config = configStore.page1Configs[selectedNavId.value!]
+  if (config?.cardArea?.cards) {
+    const card = config.cardArea.cards[index]
+    editingCardIndex.value = index
+    cardForm.value = {
+      key: card.key,
+      title: card.title,
+      data: String(card.data)
+    }
+    cardDialogOpen.value = true
+  }
+}
+
+const closeCardDialog = () => {
+  cardDialogOpen.value = false
+  editingCardIndex.value = null
+}
+
+const handleSaveCard = () => {
+  if (selectedNavId.value && cardForm.value.key && cardForm.value.title) {
+    const config = configStore.page1Configs[selectedNavId.value]
+    if (config) {
+      if (!config.cardArea) config.cardArea = { show: true, columns: 4, gap: '16px', cards: [] }
+      if (!config.cardArea.cards) config.cardArea.cards = []
+      
+      const newCard = {
+        key: cardForm.value.key,
+        title: cardForm.value.title,
+        data: cardForm.value.data
+      }
+      
+      if (editingCardIndex.value !== null) {
+        config.cardArea.cards[editingCardIndex.value] = newCard
+      } else {
+        config.cardArea.cards.push(newCard)
+      }
+    }
+    closeCardDialog()
+  }
+}
+
+const handleDeleteCard = (index: number) => {
+  if (!selectedNavId.value) return
+  showConfirm(
+    '确定删除？',
+    '确定要删除这个卡片吗？',
+    () => {
+      const config = configStore.page1Configs[selectedNavId.value!]
+      if (config?.cardArea?.cards) {
+        config.cardArea.cards.splice(index, 1)
+      }
+    }
+  )
+}
+
+// 切换区域显示状态
+const toggleAreaShow = (area: 'filterArea' | 'actionsArea' | 'cardArea' | 'tableArea') => {
+  if (!selectedNavId.value) return
+  const config = configStore.page1Configs[selectedNavId.value]
+  if (config) {
+    if (area === 'filterArea') {
+      config.filterArea.show = config.filterArea.show === false ? true : false
+    } else if (area === 'actionsArea') {
+      if (!config.actionsArea) config.actionsArea = { buttons: [] }
+      config.actionsArea.show = config.actionsArea.show === false ? true : false
+    } else if (area === 'cardArea') {
+      if (!config.cardArea) config.cardArea = { show: true, columns: 4, gap: '16px', cards: [] }
+      config.cardArea.show = !config.cardArea.show
+    } else if (area === 'tableArea') {
+      config.tableArea.show = config.tableArea.show === false ? true : false
+    }
+  }
 }
 
 // ============================================
@@ -618,10 +714,22 @@ const columnList = computed({
 
 // 操作按钮列表的本地副本用于拖拽
 const actionList = computed({
-  get: () => currentPageConfig.value?.actions || [],
+  get: () => currentPageConfig.value?.actionsArea?.buttons || [],
   set: (val) => {
     if (currentPageConfig.value) {
-      currentPageConfig.value.actions = val
+      if (!currentPageConfig.value.actionsArea) currentPageConfig.value.actionsArea = { buttons: [] }
+      currentPageConfig.value.actionsArea.buttons = val
+    }
+  }
+})
+
+// 卡片列表的本地副本用于拖拽
+const cardList = computed({
+  get: () => currentPageConfig.value?.cardArea?.cards || [],
+  set: (val) => {
+    if (currentPageConfig.value) {
+      if (!currentPageConfig.value.cardArea) currentPageConfig.value.cardArea = { show: true, columns: 4, gap: '16px', cards: [] }
+      currentPageConfig.value.cardArea.cards = val
     }
   }
 })
@@ -936,6 +1044,202 @@ const handleSaveToSource = async () => {
                 </div>
               </div>
 
+              <!-- 操作区配置 -->
+              <div class="border rounded-lg">
+                <div class="p-4 border-b flex items-center justify-between bg-muted/30">
+                  <div class="flex items-center gap-3">
+                    <h4 class="font-semibold">操作区配置</h4>
+                    <div class="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        :checked="currentPageConfig.actionsArea?.show !== false"
+                        @change="toggleAreaShow('actionsArea')"
+                        class="rounded"
+                      />
+                      <label class="text-xs text-muted-foreground">显示</label>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" @click="openAddActionDialog">
+                    <Plus class="w-4 h-4 mr-1" />
+                    添加按钮
+                  </Button>
+                </div>
+                <div class="p-4 space-y-4">
+                  <!-- Action List -->
+                  <div class="border rounded-md" v-if="currentPageConfig.actionsArea?.buttons && currentPageConfig.actionsArea.buttons.length > 0">
+                    <table class="w-full">
+                      <thead>
+                        <tr class="border-b bg-muted/50">
+                          <th class="w-8 p-2"></th>
+                          <th class="text-left p-2 text-sm font-medium">标签</th>
+                          <th class="text-left p-2 text-sm font-medium">Key</th>
+                          <th class="text-left p-2 text-sm font-medium">样式</th>
+                          <th class="text-right p-2 text-sm font-medium w-20">操作</th>
+                        </tr>
+                      </thead>
+                      <draggable 
+                        v-model="actionList"
+                        tag="tbody"
+                        item-key="key"
+                        handle=".drag-handle"
+                        :animation="200"
+                      >
+                        <template #item="{ element: action, index }">
+                          <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                            <td class="p-2">
+                              <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                            </td>
+                            <td class="p-2 text-sm font-medium">{{ action.label }}</td>
+                            <td class="p-2">
+                              <code class="text-xs text-muted-foreground">{{ action.key }}</code>
+                            </td>
+                            <td class="p-2">
+                              <Badge variant="outline" class="text-xs">{{ action.variant || 'default' }}</Badge>
+                            </td>
+                            <td class="p-2">
+                              <div class="flex gap-1 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0"
+                                  :class="action.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                  @click="toggleActionVisibility(index)"
+                                  :title="action.visible === false ? '点击显示' : '点击隐藏'"
+                                >
+                                  <EyeOff v-if="action.visible === false" class="w-3 h-3" />
+                                  <Eye v-else class="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0"
+                                  @click="openEditActionDialog(index)"
+                                >
+                                  <Pencil class="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                  @click="handleDeleteAction(index)"
+                                >
+                                  <Trash2 class="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        </template>
+                      </draggable>
+                    </table>
+                  </div>
+                  <div v-if="!currentPageConfig.actionsArea?.buttons || currentPageConfig.actionsArea.buttons.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
+                    暂无操作按钮
+                  </div>
+                </div>
+              </div>
+
+              <!-- 卡片区配置 -->
+              <div class="border rounded-lg">
+                <div class="p-4 border-b flex items-center justify-between bg-muted/30">
+                  <div class="flex items-center gap-3">
+                    <h4 class="font-semibold">卡片区配置</h4>
+                    <div class="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        :checked="currentPageConfig.cardArea?.show !== false"
+                        @change="toggleAreaShow('cardArea')"
+                        class="rounded"
+                      />
+                      <label class="text-xs text-muted-foreground">显示</label>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" @click="openAddCardDialog">
+                    <Plus class="w-4 h-4 mr-1" />
+                    添加卡片
+                  </Button>
+                </div>
+                <div class="p-4 space-y-4">
+                  <!-- 布局配置 -->
+                  <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-2">
+                      <label class="text-sm text-muted-foreground">列数:</label>
+                      <Input 
+                        :model-value="currentPageConfig.cardArea?.columns || 4"
+                        @update:model-value="(v: string | number) => { if (currentPageConfig && currentPageConfig.cardArea) currentPageConfig.cardArea.columns = Number(v) }"
+                        type="number"
+                        class="w-20 h-8"
+                      />
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <label class="text-sm text-muted-foreground">间距:</label>
+                      <Input 
+                        :model-value="currentPageConfig.cardArea?.gap || '16px'"
+                        @update:model-value="(v: string | number) => { if (currentPageConfig && currentPageConfig.cardArea) currentPageConfig.cardArea.gap = String(v) }"
+                        class="w-24 h-8"
+                        placeholder="如 16px"
+                      />
+                    </div>
+                  </div>
+                  <!-- 卡片列表 - Table -->
+                  <div class="border rounded-md" v-if="currentPageConfig.cardArea?.cards && currentPageConfig.cardArea.cards.length > 0">
+                    <table class="w-full">
+                      <thead>
+                        <tr class="border-b bg-muted/50">
+                          <th class="w-8 p-2"></th>
+                          <th class="text-left p-2 text-sm font-medium">Key</th>
+                          <th class="text-left p-2 text-sm font-medium">标题</th>
+                          <th class="text-left p-2 text-sm font-medium">数据</th>
+                          <th class="text-right p-2 text-sm font-medium w-20">操作</th>
+                        </tr>
+                      </thead>
+                      <draggable 
+                        v-model="cardList"
+                        tag="tbody"
+                        item-key="key"
+                        handle=".drag-handle"
+                        :animation="200"
+                      >
+                        <template #item="{ element: card, index }">
+                          <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                            <td class="p-2">
+                              <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                            </td>
+                            <td class="p-2">
+                              <code class="text-xs text-muted-foreground">{{ card.key }}</code>
+                            </td>
+                            <td class="p-2 text-sm">{{ card.title }}</td>
+                            <td class="p-2 text-sm text-muted-foreground">{{ card.data }}</td>
+                            <td class="p-2">
+                              <div class="flex gap-1 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0"
+                                  @click="openEditCardDialog(index)"
+                                >
+                                  <Pencil class="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  class="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                  @click="handleDeleteCard(index)"
+                                >
+                                  <Trash2 class="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        </template>
+                      </draggable>
+                    </table>
+                  </div>
+                  <div v-if="!currentPageConfig.cardArea?.cards || currentPageConfig.cardArea.cards.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
+                    暂无卡片配置
+                  </div>
+                </div>
+              </div>
+
               <!-- 表格区配置 -->
               <div class="border rounded-lg">
                 <div class="p-4 border-b flex items-center justify-between bg-muted/30">
@@ -1058,88 +1362,6 @@ const handleSaveToSource = async () => {
                   <div v-if="currentPageConfig.tableArea.columns.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
                     暂无表格列
                   </div>
-                </div>
-              </div>
-
-              <!-- Action Buttons Configuration -->
-              <div class="space-y-4 mt-6">
-                <div class="flex items-center justify-between">
-                  <h4 class="text-sm font-semibold">操作按钮配置</h4>
-                  <Button variant="outline" size="sm" class="h-8" @click="openAddActionDialog">
-                    <Plus class="w-4 h-4 mr-1" />
-                    添加按钮
-                  </Button>
-                </div>
-                
-                <!-- Action List -->
-                <div class="border rounded-md" v-if="currentPageConfig.actions && currentPageConfig.actions.length > 0">
-                  <table class="w-full">
-                    <thead>
-                      <tr class="border-b bg-muted/50">
-                        <th class="w-8 p-2"></th>
-                        <th class="text-left p-2 text-sm font-medium">标签</th>
-                        <th class="text-left p-2 text-sm font-medium">Key</th>
-                        <th class="text-left p-2 text-sm font-medium">样式</th>
-                        <th class="text-right p-2 text-sm font-medium w-20">操作</th>
-                      </tr>
-                    </thead>
-                    <draggable 
-                      v-model="actionList"
-                      tag="tbody"
-                      item-key="key"
-                      handle=".drag-handle"
-                      :animation="200"
-                    >
-                      <template #item="{ element: action, index }">
-                        <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                          <td class="p-2">
-                            <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
-                          </td>
-                          <td class="p-2 text-sm font-medium">{{ action.label }}</td>
-                          <td class="p-2">
-                            <code class="text-xs text-muted-foreground">{{ action.key }}</code>
-                          </td>
-                          <td class="p-2">
-                            <Badge variant="outline" class="text-xs">{{ action.variant || 'default' }}</Badge>
-                          </td>
-                          <td class="p-2">
-                            <div class="flex gap-1 justify-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                class="h-7 w-7 p-0"
-                                :class="action.visible === false ? 'text-muted-foreground' : 'text-foreground'"
-                                @click="toggleActionVisibility(index)"
-                                :title="action.visible === false ? '点击显示' : '点击隐藏'"
-                              >
-                                <EyeOff v-if="action.visible === false" class="w-3 h-3" />
-                                <Eye v-else class="w-3 h-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                class="h-7 w-7 p-0"
-                                @click="openEditActionDialog(index)"
-                              >
-                                <Pencil class="w-3 h-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                class="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                @click="handleDeleteAction(index)"
-                              >
-                                <Trash2 class="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      </template>
-                    </draggable>
-                  </table>
-                </div>
-                <div v-if="!currentPageConfig.actions || currentPageConfig.actions.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
-                  暂无操作按钮
                 </div>
               </div>
 
@@ -1350,6 +1572,34 @@ const handleSaveToSource = async () => {
       <DialogFooter>
         <Button variant="outline" @click="closeActionDialog">取消</Button>
         <Button @click="handleSaveAction">{{ editingActionIndex !== null ? '保存' : '添加' }}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Card Dialog -->
+  <Dialog v-model:open="cardDialogOpen">
+    <DialogContent class="sm:max-w-[400px]">
+      <DialogHeader>
+        <DialogTitle>{{ editingCardIndex !== null ? '编辑卡片' : '添加卡片' }}</DialogTitle>
+        <DialogDescription>{{ editingCardIndex !== null ? '修改卡片配置' : '添加新的卡片' }}</DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4 py-4">
+        <div class="space-y-2">
+          <label class="text-sm font-medium">Key</label>
+          <Input v-model="cardForm.key" placeholder="如 total_orders" />
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium">标题</label>
+          <Input v-model="cardForm.title" placeholder="如 订单总数" />
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium">数据</label>
+          <Input v-model="cardForm.data" placeholder="如 1,234 或动态值" />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" @click="closeCardDialog">取消</Button>
+        <Button @click="handleSaveCard">{{ editingCardIndex !== null ? '保存' : '添加' }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

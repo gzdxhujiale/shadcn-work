@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { FilterInput, FilterSelect, FilterDateRange, FilterTreeSelect } from '@/components/ui/filter'
+import { FilterInput, FilterSelect, FilterDateRange, FilterTreeSelect, FilterCard } from '@/components/ui/filter'
 import { useNavigation } from '@/config/sidebar'
 import { useConfigStore, type Page1Config } from '@/stores/configStore'
 
@@ -101,7 +101,7 @@ const visibleColumns = computed(() => {
 
 // 可见的操作按钮
 const visibleActions = computed(() => {
-  return pageConfig.value?.actions?.filter(a => a.visible !== false) || []
+  return pageConfig.value?.actionsArea?.buttons?.filter((a: { visible?: boolean }) => a.visible !== false) || []
 })
 
 // 全选状态
@@ -186,11 +186,12 @@ const getStatusClass = (status: string) => {
     <!-- 主体内容 -->
     <div class="flex-1 flex flex-col p-6 gap-4 overflow-hidden">
       
-      <!-- 功能区 - 筛选条件 -->
-      <div class="bg-background rounded-xl border shadow-sm">
+      <!-- 功能区 - 筛选条件 + 操作按钮 -->
+      <div v-if="pageConfig.filterArea?.show !== false || pageConfig.actionsArea?.show !== false" class="bg-background rounded-xl border shadow-sm">
         <div class="p-5">
           <!-- 动态筛选表单区 -->
           <div 
+            v-if="pageConfig.filterArea?.show !== false"
             class="grid mb-4"
             :style="{
               gridTemplateColumns: `repeat(${pageConfig.filterArea.columns}, 1fr)`,
@@ -233,8 +234,7 @@ const getStatusClass = (status: string) => {
           </div>
 
           <!-- 底部操作按钮 -->
-          <!-- 底部操作按钮 -->
-          <div class="flex items-center justify-between pt-2 border-t">
+          <div v-if="pageConfig.actionsArea?.show !== false" class="flex items-center justify-between pt-2 border-t">
             <div class="text-xs text-muted-foreground">
               已选择 <span class="font-semibold text-foreground">{{ selectedRows.length }}</span> 条记录
             </div>
@@ -256,8 +256,27 @@ const getStatusClass = (status: string) => {
         </div>
       </div>
 
+      <!-- 卡片区 -->
+      <div 
+        v-if="pageConfig.cardArea?.show"
+        class="grid"
+        :style="{
+          gridTemplateColumns: `repeat(${pageConfig.cardArea.columns}, 1fr)`,
+          gap: pageConfig.cardArea.gap,
+        }"
+      >
+        <FilterCard
+          v-for="card in pageConfig.cardArea.cards"
+          :key="card.key"
+          :title="card.title"
+          :data="card.data"
+          :height="pageConfig.cardArea.cardHeight"
+          :width="pageConfig.cardArea.cardWidth"
+        />
+      </div>
+
       <!-- 列表区 -->
-      <div class="flex-1 bg-background rounded-xl border shadow-sm overflow-hidden flex flex-col">
+      <div v-if="pageConfig.tableArea?.show !== false" class="flex-1 bg-background rounded-xl border shadow-sm overflow-hidden flex flex-col">
         <div 
           class="flex-1"
           :class="{
