@@ -1,4 +1,4 @@
-# Shadcn-Vue 财务数据中心
+# AIGen UI
 
 基于 Vue 3 + TypeScript + Vite + Shadcn-Vue 构建的财务数据管理平台
 
@@ -6,7 +6,9 @@
 
 这是一个使用 [shadcn-vue](https://www.shadcn-vue.com/) 组件库构建的现代化企业级应用框架，支持：
 - 🧭 **动态导航系统** - 多级面包屑和页面切换
-- 👥 **团队权限管理** - 基于角色的菜单权限控制
+- � **Supabase 认证** - 完整的用户注册/登录/重置密码流程
+- ☁️ **云端配置同步** - 用户配置自动同步 Supabase，支持多端漫游
+- �👥 **团队权限管理** - 基于角色的菜单权限控制
 - 📊 **页面组件化** - 模块化的页面管理结构
 - 🎯 **Teleport 传送门** - 灵活的 UI 组件位置控制
 
@@ -232,6 +234,8 @@ npm run type-check
 - **TypeScript** - 类型安全的 JavaScript 超集
 - **Vite** - 下一代前端构建工具
 - **Tailwind CSS** - 实用优先的 CSS 框架
+- **Supabase** - 开源 Firebase 替代品 (Auth + DB)
+- **Pinia** - Vue 的专属状态管理库
 - **Shadcn-Vue** - 可定制的 Vue UI 组件库
 - **Lucide Icons** - 精美的图标库
 

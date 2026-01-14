@@ -1,8 +1,7 @@
-import { ref, computed } from 'vue'
+import { ref, computed, h } from 'vue'
 import {
     AudioWaveform,
     Command,
-    GalleryVerticalEnd,
     SquareTerminal,
     type LucideIcon,
 } from 'lucide-vue-next'
@@ -92,6 +91,9 @@ export interface SidebarConfig {
 // 默认配置数据
 // ============================================
 
+// Custom Logo Component
+const AIGenLogo = (props: any) => h('img', { src: '/ai.svg', ...props, style: 'width: 100%; height: 100%; object-fit: contain;' })
+
 export const defaultSidebarConfig: SidebarConfig = {
     user: {
         name: ' ',
@@ -101,8 +103,8 @@ export const defaultSidebarConfig: SidebarConfig = {
 
     teams: [
         {
-            name: '创新中台',
-            logo: GalleryVerticalEnd,
+            name: 'AIGen UI',
+            logo: AIGenLogo, // Using custom logo
             plan: 'online',
             permissions: {
                 navMain: 'all',
@@ -110,27 +112,27 @@ export const defaultSidebarConfig: SidebarConfig = {
             }
         },
         {
-            name: '财务部',
+            name: 'A部门',
             logo: AudioWaveform,
-            plan: '财务BI',
+            plan: 'online',
             permissions: {
                 navMain: ['workspace', 'report', 'dashboard'],
                 projects: ['data-dictionary', 'user-manual']
             }
         },
         {
-            name: 'IT部',
+            name: 'B部门',
             logo: Command,
-            plan: '运维管理',
+            plan: 'online',
             permissions: {
                 navMain: ['rbac', 'settings'],
                 projects: ['user-manual']
             }
         },
         {
-            name: '公司经营分析',
+            name: 'C部门',
             logo: Command,
-            plan: '数据分析',
+            plan: 'online',
             permissions: {
                 navMain: ['report', 'dashboard'],
                 navItems: {
