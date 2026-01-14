@@ -156,16 +156,8 @@ export const defaultSidebarConfig: SidebarConfig = {
                     isOpen: true, // 设置为 true 则默认展开
                     items: [
                         { id: '1', title: '提现', url: '#', template: 'Page1' },
-                        { id: '2', title: '提现币商代发薪资', url: '#', template: 'Page1' },
+                        { id: '2', title: '转账', url: '#', template: 'Page1' },
                         { id: '4', title: '提现黑名单', url: '#', template: '' },
-                        { id: '3', title: '公会薪资转账', url: '#', template: '' },
-                        { id: '5', title: '离线打款', url: '#', template: '' },
-                        { id: '6', title: '在线打款', url: '#', template: '' },
-                        { id: '7', title: '大款订单', url: '#', template: '' },
-                        { id: '8', title: '结算核减', url: '#', template: '' },
-                        { id: '9', title: 'payonner账户管理', url: '#', template: '' },
-                        { id: '10', title: '账号黑名单', url: '#', template: '' },
-                        { id: '11', title: '稳定币白名单', url: '#', template: '' },
                     ],
                 },
             ],

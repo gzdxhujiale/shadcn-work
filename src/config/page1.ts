@@ -153,122 +153,132 @@ export const page1Configs: Record<string, Page1Config> = {
                 { key: 'platformOrderNo', type: 'input', label: '平台订单号', placeholder: '请输入平台订单号', defaultValue: '' },
                 { key: 'businessNo', type: 'input', label: '业务单号', placeholder: '请输入业务单号', defaultValue: '' },
                 { key: 'channelNo', type: 'input', label: '渠道单号', placeholder: '请输入渠道单号', defaultValue: '' },
-                { key: 'orderStatus', type: 'select', label: '订单状态', defaultValue: '',
-                    options: ['全部', '待审核', '审核中'] },
-                { key: 'platformOrder', type: 'select', label: '平台订单号', defaultValue: '全部',
-                    options: ['全部', 'PO001', 'PO002', 'PO003'] },
-                { key: 'accountType', type: 'select', label: '账户类型', defaultValue: '全部',
-                    options: ['全部', '支付宝', '微信', '银行卡', 'PayPal', 'Payoneer'] },
-                { key: 'country', type: 'tree-select', label: '国家-渠道', defaultValue: '',
+                {
+                    key: 'orderStatus', type: 'select', label: '订单状态', defaultValue: '',
+                    options: ['全部', '待审核', '审核中']
+                },
+                {
+                    key: 'platformOrder', type: 'select', label: '平台订单号', defaultValue: '全部',
+                    options: ['全部', 'PO001', 'PO002', 'PO003']
+                },
+                {
+                    key: 'accountType', type: 'select', label: '账户类型', defaultValue: '全部',
+                    options: ['全部', '支付宝', '微信', '银行卡', 'PayPal', 'Payoneer']
+                },
+                {
+                    key: 'country', type: 'tree-select', label: '国家-渠道', defaultValue: '',
                     treeOptions: [
-          {
-                    value: "egypt",
-                    label: "埃及",
-                    children: [
-                              {
-                                        value: "egypt-airwallex",
-                                        label: "airwallex"
-                              },
-                              {
-                                        value: "egypt-payoneer",
-                                        label: "payoneer"
-                              },
-                              {
-                                        value: "egypt-payermax",
-                                        label: "payermax"
-                              },
-                              {
-                                        value: "egypt-dlocal",
-                                        label: "dlocal（2026.1.6下线）"
-                              }
+                        {
+                            value: "egypt",
+                            label: "埃及",
+                            children: [
+                                {
+                                    value: "egypt-airwallex",
+                                    label: "airwallex"
+                                },
+                                {
+                                    value: "egypt-payoneer",
+                                    label: "payoneer"
+                                },
+                                {
+                                    value: "egypt-payermax",
+                                    label: "payermax"
+                                },
+                                {
+                                    value: "egypt-dlocal",
+                                    label: "dlocal（2026.1.6下线）"
+                                }
+                            ]
+                        },
+                        {
+                            value: "morocco",
+                            label: "摩洛哥",
+                            children: [
+                                {
+                                    value: "morocco-dlocal",
+                                    label: "dlocal"
+                                },
+                                {
+                                    value: "morocco-payoneer",
+                                    label: "payoneer"
+                                }
+                            ]
+                        },
+                        {
+                            value: "turkey",
+                            label: "土耳其",
+                            children: [
+                                {
+                                    value: "turkey-dlocal",
+                                    label: "dlocal"
+                                },
+                                {
+                                    value: "turkey-airwallex",
+                                    label: "airwallex"
+                                },
+                                {
+                                    value: "turkey-payoneer",
+                                    label: "payoneer"
+                                }
+                            ]
+                        },
+                        {
+                            value: "algeria",
+                            label: "阿尔及利亚",
+                            children: [
+                                {
+                                    value: "algeria-dlocal",
+                                    label: "dlocal"
+                                },
+                                {
+                                    value: "algeria-payoneer",
+                                    label: "payoneer"
+                                }
+                            ]
+                        },
+                        {
+                            value: "jordan",
+                            label: "约旦",
+                            children: [
+                                {
+                                    value: "jordan-dlocal",
+                                    label: "dlocal"
+                                },
+                                {
+                                    value: "jordan-payoneer",
+                                    label: "payoneer"
+                                }
+                            ]
+                        },
+                        {
+                            value: "thailand",
+                            label: "泰国",
+                            children: [
+                                {
+                                    value: "thailand-airwallex",
+                                    label: "airwallex"
+                                },
+                                {
+                                    value: "thailand-payoneer",
+                                    label: "payoneer"
+                                }
+                            ]
+                        },
+                        {
+                            value: "saudi-arabia",
+                            label: "沙特",
+                            children: []
+                        }
                     ]
-          },
-          {
-                    value: "morocco",
-                    label: "摩洛哥",
-                    children: [
-                              {
-                                        value: "morocco-dlocal",
-                                        label: "dlocal"
-                              },
-                              {
-                                        value: "morocco-payoneer",
-                                        label: "payoneer"
-                              }
-                    ]
-          },
-          {
-                    value: "turkey",
-                    label: "土耳其",
-                    children: [
-                              {
-                                        value: "turkey-dlocal",
-                                        label: "dlocal"
-                              },
-                              {
-                                        value: "turkey-airwallex",
-                                        label: "airwallex"
-                              },
-                              {
-                                        value: "turkey-payoneer",
-                                        label: "payoneer"
-                              }
-                    ]
-          },
-          {
-                    value: "algeria",
-                    label: "阿尔及利亚",
-                    children: [
-                              {
-                                        value: "algeria-dlocal",
-                                        label: "dlocal"
-                              },
-                              {
-                                        value: "algeria-payoneer",
-                                        label: "payoneer"
-                              }
-                    ]
-          },
-          {
-                    value: "jordan",
-                    label: "约旦",
-                    children: [
-                              {
-                                        value: "jordan-dlocal",
-                                        label: "dlocal"
-                              },
-                              {
-                                        value: "jordan-payoneer",
-                                        label: "payoneer"
-                              }
-                    ]
-          },
-          {
-                    value: "thailand",
-                    label: "泰国",
-                    children: [
-                              {
-                                        value: "thailand-airwallex",
-                                        label: "airwallex"
-                              },
-                              {
-                                        value: "thailand-payoneer",
-                                        label: "payoneer"
-                              }
-                    ]
-          },
-          {
-                    value: "saudi-arabia",
-                    label: "沙特",
-                    children: []
-          }
-] },
-                { key: 'region', type: 'select', label: '大区', defaultValue: '全部',
-                    options: ['全部', '华东', '华南', '华北', '华中'] },
-                { key: 'largeWithdraw', type: 'select', label: '大额提现单', defaultValue: '全部',
-                    options: ['全部', '是', '否'] },
-                { key: 'projectType', type: 'select', label: '项目类型', defaultValue: '全部',
-                    options: ['全部', '直播', '短视频', '游戏', '电商'] },
+                },
+                {
+                    key: 'region', type: 'select', label: '大区', defaultValue: '全部',
+                    options: ['全部', '华东', '华南', '华北', '华中']
+                },
+                {
+                    key: 'projectType', type: 'select', label: '项目类型', defaultValue: '全部',
+                    options: ['全部', '直播', '短视频', '游戏', '电商']
+                },
                 { key: 'applyTime', type: 'date-range', label: '申请时间', defaultValue: undefined },
                 { key: 'completeTime', type: 'date-range', label: '完成时间', defaultValue: undefined },
             ],
@@ -299,7 +309,7 @@ export const page1Configs: Record<string, Page1Config> = {
                 { key: 'orderNo', label: '订单号', width: '100px' },
                 { key: 'statusText', label: '订单状态', width: '100px', type: 'status-badge' },
                 { key: 'userName', label: '用户信息', width: '100px' },
-                { key: 'guildName', label: '公会信息', width: '120px' },
+                { key: 'guildName', label: '用户状态', width: '120px' },
                 { key: 'deviceModel', label: '用户设备信息', width: '150px' },
             ],
         },

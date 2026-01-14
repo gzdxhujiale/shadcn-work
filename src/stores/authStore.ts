@@ -9,6 +9,7 @@ export const useAuthStore = defineStore('auth', () => {
     const session = ref<Session | null>(null)
     const isLoading = ref(true)
     const error = ref<string | null>(null)
+    let authSubscription: { unsubscribe: () => void } | null = null
 
     // Getters
     const isAuthenticated = computed(() => !!user.value)
@@ -53,8 +54,12 @@ export const useAuthStore = defineStore('auth', () => {
             }
 
             // Set up auth state change listener
-            // Note: subscription is used to keep the listener active; unsubscribe on app unmount if needed
-            supabase.auth.onAuthStateChange(
+            // Clean up old subscription first
+            if (authSubscription) {
+                authSubscription.unsubscribe()
+            }
+
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(
                 (event: AuthChangeEvent, newSession: Session | null) => {
                     console.log('Auth state changed:', event)
                     session.value = newSession
@@ -66,6 +71,7 @@ export const useAuthStore = defineStore('auth', () => {
                     }
                 }
             )
+            authSubscription = subscription
 
             // Store subscription for cleanup if needed
             // Note: In a real app, you might want to store this and unsubscribe on app unmount
@@ -196,6 +202,17 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    /**
+     * Cleanup subscriptions
+     * Call this on app unmount
+     */
+    const cleanup = () => {
+        if (authSubscription) {
+            authSubscription.unsubscribe()
+            authSubscription = null
+        }
+    }
+
     return {
         // State
         user,
@@ -212,6 +229,7 @@ export const useAuthStore = defineStore('auth', () => {
         signInWithPassword,
         signUp,
         signOut,
-        resetPassword
+        resetPassword,
+        cleanup
     }
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
-import { ChevronRight, Loader2 } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { ChevronRight } from 'lucide-vue-next'
 import AppSidebar from '@/components/AppSidebar.vue'
 import {
   Breadcrumb,
@@ -21,6 +21,10 @@ import Page1 from '@/components/templates/Page1.vue'
 import PlaceholderPage from '@/components/pages/PlaceholderPage.vue'
 import Settings from '@/components/pages/Settings.vue'
 import AuthPage from '@/components/pages/AuthPage.vue'
+import SkeletonLoading from '@/components/shared/SkeletonLoading.vue'
+
+// Composables
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 // Auth Store
 import { useAuthStore } from '@/stores/authStore'
@@ -63,16 +67,19 @@ watch(() => authStore.isAuthenticated, async (isAuth) => {
     await configStore.loadFromSupabase()
   }
 })
+
+// Cleanup on unmount
+onUnmounted(() => {
+  authStore.cleanup()
+})
+
+// Network status monitoring
+const { isOnline } = useNetworkStatus()
 </script>
 
 <template>
-  <!-- Loading state while checking auth -->
-  <div v-if="authStore.isLoading" class="loading-container">
-    <div class="loading-content">
-      <Loader2 class="loading-spinner" />
-      <p class="loading-text">正在加载...</p>
-    </div>
-  </div>
+  <!-- Loading state: show skeleton -->
+  <SkeletonLoading v-if="authStore.isLoading" />
 
   <!-- Not authenticated: show login page -->
   <AuthPage v-else-if="!authStore.isAuthenticated" />

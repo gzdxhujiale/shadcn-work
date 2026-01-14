@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { defaultSidebarConfig } from '@/config/sidebar'
 import { page1Configs as defaultPage1Configs } from '@/config/page1'
 import { supabase } from '@/lib/supabase'
+import { toast } from 'vue-sonner'
 
 // ============================================
 // 导航配置类型定义
@@ -993,12 +994,16 @@ export function getPage1Config(navId: string): Page1Config | undefined {
 
             if (error) {
                 console.error('Failed to save to Supabase:', error)
+                toast.error('保存失败', { description: error.message })
                 return { success: false, message: error.message }
             }
+
+            toast.success('配置已保存到云端')
 
             return { success: true, message: '配置已保存到云端' }
         } catch (e) {
             console.error('Failed to save to Supabase:', e)
+            toast.error('保存失败', { description: (e as Error).message })
             return { success: false, message: '保存失败: ' + (e as Error).message }
         }
     }
@@ -1011,6 +1016,7 @@ export function getPage1Config(navId: string): Page1Config | undefined {
             // 获取当前用户
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) {
+                toast.error('未登录', { description: '请先登录后再加载配置' })
                 return { success: false, message: '用户未登录' }
             }
 
@@ -1024,12 +1030,14 @@ export function getPage1Config(navId: string): Page1Config | undefined {
                 // PGRST116 表示没有找到记录
                 if (error.code === 'PGRST116') {
                     console.log('用户没有云端配置，使用默认配置')
+                    toast.info('未找到云端配置', { description: '已加载默认配置' })
                     // 清除 localStorage，使用纯默认配置
                     localStorage.removeItem(STORAGE_KEY_PAGE1_CONFIGS)
                     resetToDefaults()
                     return { success: true, message: '使用默认配置' }
                 }
                 console.error('Failed to load from Supabase:', error)
+                toast.error('加载失败', { description: error.message })
                 return { success: false, message: error.message }
             }
 
@@ -1041,8 +1049,11 @@ export function getPage1Config(navId: string): Page1Config | undefined {
                 const result = importFullConfig(data.config_data)
                 if (result.success) {
                     console.log('已从云端加载配置')
+                    toast.success('已加载云端配置')
                     // 将云端配置同步到 localStorage
                     savePage1ConfigsToStorage(page1Configs.value)
+                } else {
+                    toast.error('配置导入失败', { description: result.message })
                 }
                 return result
             }

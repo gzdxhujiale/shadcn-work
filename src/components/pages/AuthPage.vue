@@ -60,6 +60,12 @@ const handleLogin = async () => {
   }
 }
 
+const handleTestLogin = async () => {
+  email.value = 'test@example.com'
+  password.value = 'test'
+  await handleLogin()
+}
+
 const handleRegister = async () => {
   if (!canSubmitRegister.value) return
   
@@ -172,6 +178,19 @@ const switchView = (view: 'login' | 'register' | 'forgot-password') => {
           <Button type="submit" class="w-full" :disabled="!canSubmitLogin || authStore.isLoading">
              <Loader2 v-if="authStore.isLoading" class="mr-2 h-4 w-4 animate-spin" />
              登录
+          </Button>
+
+          <div class="relative my-2">
+            <div class="absolute inset-0 flex items-center">
+              <span class="w-full border-t" />
+            </div>
+            <div class="relative flex justify-center text-xs uppercase">
+              <span class="bg-card px-2 text-muted-foreground">或者</span>
+            </div>
+          </div>
+
+          <Button type="button" variant="outline" class="w-full" @click="handleTestLogin" :disabled="authStore.isLoading">
+             测试账户登录
           </Button>
           
           <div class="mt-4 text-center text-sm">
