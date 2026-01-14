@@ -13,4 +13,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      // Proxy Coze API requests to bypass CORS
+      '/api/coze': {
+        target: 'https://api.coze.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/coze/, ''),
+        headers: {
+          'Origin': 'https://api.coze.cn',
+        },
+      },
+    },
+  },
 })
+

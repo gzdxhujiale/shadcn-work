@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { defaultSidebarConfig } from '@/config/sidebar'
+import { defaultSidebarConfig, setNavGroupsRef } from '@/config/sidebar'
 import { page1Configs as defaultPage1Configs } from '@/config/page1'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'vue-sonner'
@@ -113,6 +113,11 @@ export const useConfigStore = defineStore('config', () => {
     watch(page1Configs, (newConfigs) => {
         savePage1ConfigsToStorage(newConfigs)
     }, { deep: true })
+
+    // 同步 navGroups 到 sidebar 导航系统（用于模板查找）
+    watch(navGroups, (newNavGroups) => {
+        setNavGroupsRef(newNavGroups)
+    }, { deep: true, immediate: true })
 
     // Getters
     const getNavGroup = computed(() => (index: number) => navGroups.value[index])
@@ -880,64 +885,28 @@ export function getPage1Config(navId: string): Page1Config | undefined {
                 return { success: false, message: '无效的配置格式' }
             }
 
-            // 导入导航组
+            // 导入导航组 - 完全替换而不是合并，确保云端配置完全覆盖本地
             if (data.navGroups && Array.isArray(data.navGroups)) {
-                // 合并导航组：保留现有的，更新/添加导入的
+                // 清空现有导航组
+                navGroups.value = []
+
+                // 导入所有导航组
                 data.navGroups.forEach(importGroup => {
-                    // 查找现有组（按 label 匹配）
-                    let existingGroup = navGroups.value.find(g => g.label === importGroup.label)
-
-                    if (!existingGroup) {
-                        // 新建组
-                        navGroups.value.push({
-                            label: importGroup.label,
-                            showLabel: importGroup.showLabel,
-                            items: []
-                        })
-                        existingGroup = navGroups.value[navGroups.value.length - 1]
-                    }
-
-                    // 合并主导航项
-                    importGroup.items?.forEach(importMainItem => {
-                        const existingMainItem = existingGroup!.items.find(i => i.id === importMainItem.id)
-
-                        if (existingMainItem) {
-                            // 更新现有项
-                            existingMainItem.title = importMainItem.title
-                            existingMainItem.isOpen = importMainItem.isOpen
-
-                            // 合并子导航项
-                            importMainItem.items?.forEach(importSubItem => {
-                                const existingSub = existingMainItem.items?.find(s => s.id === importSubItem.id)
-                                if (existingSub) {
-                                    existingSub.title = importSubItem.title
-                                    existingSub.url = importSubItem.url || '#'
-                                    existingSub.template = importSubItem.template as 'Page1' | 'Page2' | ''
-                                } else {
-                                    if (!existingMainItem.items) existingMainItem.items = []
-                                    existingMainItem.items.push({
-                                        id: importSubItem.id,
-                                        title: importSubItem.title,
-                                        url: importSubItem.url || '#',
-                                        template: importSubItem.template as 'Page1' | 'Page2' | ''
-                                    })
-                                }
-                            })
-                        } else {
-                            // 新建主导航项
-                            existingGroup!.items.push({
-                                id: importMainItem.id,
-                                title: importMainItem.title,
-                                url: '#',
-                                isOpen: importMainItem.isOpen,
-                                items: importMainItem.items?.map(sub => ({
-                                    id: sub.id,
-                                    title: sub.title,
-                                    url: sub.url || '#',
-                                    template: sub.template as 'Page1' | 'Page2' | ''
-                                }))
-                            })
-                        }
+                    navGroups.value.push({
+                        label: importGroup.label,
+                        showLabel: importGroup.showLabel,
+                        items: importGroup.items?.map(mainItem => ({
+                            id: mainItem.id,
+                            title: mainItem.title,
+                            url: '#',
+                            isOpen: mainItem.isOpen,
+                            items: mainItem.items?.map(sub => ({
+                                id: sub.id,
+                                title: sub.title,
+                                url: sub.url || '#',
+                                template: sub.template as 'Page1' | 'Page2' | ''
+                            }))
+                        })) || []
                     })
                 })
             }

@@ -266,6 +266,16 @@ const currentSubNav = ref(firstSubNav?.title ?? '')
 const _currentNavId = ref(firstSubNav?.id ?? '')
 const detailTitle = ref<string | null>(null)
 
+// 外部注入的 navGroups 引用（来自 configStore，避免循环依赖）
+const _navGroupsRef = ref<NavGroup[] | null>(null)
+
+/**
+ * 设置 navGroups 引用（由 configStore 调用）
+ */
+export function setNavGroupsRef(navGroups: NavGroup[]) {
+    _navGroupsRef.value = navGroups
+}
+
 /**
  * 导航状态管理 Composable
  * 用于管理当前选中的导航项和面包屑
@@ -307,8 +317,22 @@ export function useNavigation() {
     const currentNavId = computed(() => _currentNavId.value)
 
     // 计算当前页面模板 - 从配置中动态查找
+    // 注意：需要从外部注入 configStore 的 navGroups 引用以避免循环依赖
+    // 这里先从默认配置查找，configStore 会在加载后更新
     const currentTemplate = computed(() => {
-        // 遍历所有导航组查找当前子导航对应的模板
+        // 优先从 _navGroupsRef 查找（由 configStore 注入）
+        if (_navGroupsRef.value) {
+            for (const group of _navGroupsRef.value) {
+                for (const mainItem of group.items) {
+                    const subItem = mainItem.items?.find((item: NavSubItem) => item.id === _currentNavId.value)
+                    if (subItem?.template) {
+                        return subItem.template
+                    }
+                }
+            }
+        }
+
+        // 回退：从默认配置查找
         for (const group of defaultSidebarConfig.navGroups) {
             for (const mainItem of group.items) {
                 const subItem = mainItem.items?.find(item => item.id === _currentNavId.value)

@@ -23,6 +23,9 @@ import Settings from '@/components/pages/Settings.vue'
 import AuthPage from '@/components/pages/AuthPage.vue'
 import SkeletonLoading from '@/components/shared/SkeletonLoading.vue'
 
+// AI Components
+import { AIChatButton, AIChatWindow } from '@/components/ai'
+
 // Composables
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
@@ -136,9 +139,13 @@ useNetworkStatus()
         </Transition>
       </div>
     </SidebarInset>
+    
+    <!-- AI Chat Components -->
+    <AIChatButton />
+    <AIChatWindow />
   </SidebarProvider>
   
-  <Toaster />
+  <Toaster position="top-right" />
 </template>
 
 <style>
