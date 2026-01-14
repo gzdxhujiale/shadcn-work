@@ -7,7 +7,7 @@ import configWriter from './plugins/vite-plugin-config-writer'
 
 export default defineConfig({
   plugins: [vue(), tailwindcss(), configWriter()],
-  base: '/AIGen-UI/',
+  base: '/AIGen-UI/', // Deploying to https://github.com/gzdxhujiale/AIGen-UI
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
