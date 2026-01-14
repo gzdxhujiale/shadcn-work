@@ -74,7 +74,7 @@ onUnmounted(() => {
 })
 
 // Network status monitoring
-const { isOnline } = useNetworkStatus()
+useNetworkStatus()
 </script>
 
 <template>

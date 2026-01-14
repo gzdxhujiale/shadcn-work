@@ -92,7 +92,7 @@ export interface SidebarConfig {
 // ============================================
 
 // Custom Logo Component
-const AIGenLogo = (props: any) => h('img', { src: '/ai.svg', ...props, style: 'width: 100%; height: 100%; object-fit: contain;' })
+const AIGenLogo = (props: any) => h('img', { src: import.meta.env.BASE_URL + 'ai.svg', ...props, style: 'width: 100%; height: 100%; object-fit: contain;' })
 
 export const defaultSidebarConfig: SidebarConfig = {
     user: {
