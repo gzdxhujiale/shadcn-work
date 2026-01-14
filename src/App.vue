@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { ChevronRight } from 'lucide-vue-next'
+import { computed, onMounted, watch } from 'vue'
+import { ChevronRight, Loader2 } from 'lucide-vue-next'
 import AppSidebar from '@/components/AppSidebar.vue'
 import {
   Breadcrumb,
@@ -20,8 +20,16 @@ import "vue-sonner/style.css"
 import Page1 from '@/components/templates/Page1.vue'
 import PlaceholderPage from '@/components/pages/PlaceholderPage.vue'
 import Settings from '@/components/pages/Settings.vue'
+import AuthPage from '@/components/pages/AuthPage.vue'
+
+// Auth Store
+import { useAuthStore } from '@/stores/authStore'
+// Config Store
+import { useConfigStore } from '@/stores/configStore'
 
 const { breadcrumbs, currentPage, setDetailTitle } = useNavigation()
+const authStore = useAuthStore()
+const configStore = useConfigStore()
 
 // 页面模板映射
 const pageComponents: Record<string, any> = {
@@ -39,10 +47,38 @@ const handleSubNavClick = () => {
     setDetailTitle(null)
   }
 }
+
+// Initialize auth on mount
+onMounted(async () => {
+  await authStore.initialize()
+  // 登录成功后加载云端配置
+  if (authStore.isAuthenticated) {
+    await configStore.loadFromSupabase()
+  }
+})
+
+// 监听认证状态变化，登录后加载配置
+watch(() => authStore.isAuthenticated, async (isAuth) => {
+  if (isAuth) {
+    await configStore.loadFromSupabase()
+  }
+})
 </script>
 
 <template>
-  <SidebarProvider>
+  <!-- Loading state while checking auth -->
+  <div v-if="authStore.isLoading" class="loading-container">
+    <div class="loading-content">
+      <Loader2 class="loading-spinner" />
+      <p class="loading-text">正在加载...</p>
+    </div>
+  </div>
+
+  <!-- Not authenticated: show login page -->
+  <AuthPage v-else-if="!authStore.isAuthenticated" />
+
+  <!-- Authenticated: show main app -->
+  <SidebarProvider v-else>
     <AppSidebar />
     <SidebarInset>
       <header class="flex h-16 shrink-0 items-center gap-2 border-b px-4">
@@ -93,11 +129,45 @@ const handleSubNavClick = () => {
         </Transition>
       </div>
     </SidebarInset>
-    <Toaster />
   </SidebarProvider>
+  
+  <Toaster />
 </template>
 
 <style>
+/* Loading state styles */
+.loading-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--background));
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: hsl(var(--primary));
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Page transition effects */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
@@ -114,4 +184,5 @@ const handleSubNavClick = () => {
   transform: translateY(-10px);
 }
 </style>
+
 

@@ -739,29 +739,6 @@ const cardList = computed({
 // ============================================
 
 const isSaving = ref(false)
-const handleSaveToSource = async () => {
-  showConfirm(
-    '确定写入源码？',
-    '这将更新 src/config/page1.ts 和 src/config/sidebar.ts 文件。\nVite 会自动热更新。',
-    async () => {
-      isSaving.value = true
-      try {
-        const success = await configStore.saveToSourceFile()
-        if (success) {
-          toast.success('保存成功', {
-            description: 'page1.ts 已更新，Vite 正在热更新...'
-          })
-        } else {
-          toast.error('保存失败', {
-            description: '请确认插件已配置且运行在开发环境。'
-          })
-        }
-      } finally {
-        isSaving.value = false
-      }
-    }
-  )
-}
 
 // ============================================
 // 配置导入/导出功能
@@ -808,6 +785,10 @@ const handleImportConfig = () => {
   fileInputRef.value?.click()
 }
 
+// 待确认导入的数据
+const pendingImportData = ref<any>(null)
+const importConfirmDialogOpen = ref(false)
+
 // 处理文件选择
 const handleFileSelected = (event: Event) => {
   const input = event.target as HTMLInputElement
@@ -818,16 +799,16 @@ const handleFileSelected = (event: Event) => {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target?.result as string)
-      const result = configStore.importFullConfig(data)
-      if (result.success) {
-        toast.success('导入成功', {
-          description: result.message
-        })
-      } else {
+      // 验证数据格式
+      if (!data.version || !data.navGroups || !data.pageConfigs) {
         toast.error('导入失败', {
-          description: result.message
+          description: '无效的配置文件格式'
         })
+        return
       }
+      // 储存数据并显示确认对话框
+      pendingImportData.value = data
+      importConfirmDialogOpen.value = true
     } catch (err) {
       toast.error('导入失败', {
         description: '无效的 JSON 文件格式'
@@ -838,6 +819,49 @@ const handleFileSelected = (event: Event) => {
   
   // 清空 input 以便重复选择同一文件
   input.value = ''
+}
+
+// 确认导入并同步到云端
+const handleConfirmImport = async () => {
+  if (!pendingImportData.value) return
+  
+  isSaving.value = true
+  importConfirmDialogOpen.value = false
+  
+  try {
+    const result = await configStore.importAndSyncToCloud(pendingImportData.value)
+    if (result.success) {
+      toast.success('导入成功', {
+        description: result.message
+      })
+    } else {
+      toast.error('导入失败', {
+        description: result.message
+      })
+    }
+  } finally {
+    isSaving.value = false
+    pendingImportData.value = null
+  }
+}
+
+// 保存配置到云端
+const handleSaveToCloud = async () => {
+  isSaving.value = true
+  try {
+    const result = await configStore.saveToSupabase()
+    if (result.success) {
+      toast.success('保存成功', {
+        description: result.message
+      })
+    } else {
+      toast.error('保存失败', {
+        description: result.message
+      })
+    }
+  } finally {
+    isSaving.value = false
+  }
 }
 </script>
 
@@ -873,10 +897,10 @@ const handleFileSelected = (event: Event) => {
           <Trash2 class="w-4 h-4 mr-2" />
           重置页面
         </Button>
-        <Button variant="ghost" size="sm" @click="handleSaveToSource" :disabled="isSaving">
+        <Button variant="ghost" size="sm" @click="handleSaveToCloud" :disabled="isSaving">
           <Save class="w-4 h-4 mr-2" />
           <span v-if="isSaving">保存中...</span>
-          <span v-else>写入源码</span>
+          <span v-else>保存</span>
         </Button>
       </div>
       
@@ -1763,6 +1787,22 @@ const handleFileSelected = (event: Event) => {
       <AlertDialogFooter>
         <AlertDialogCancel @click="handleCancelConfirm">取消</AlertDialogCancel>
         <AlertDialogAction @click="handleConfirmAction">确定</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+
+  <!-- 导入确认对话框 -->
+  <AlertDialog v-model:open="importConfirmDialogOpen">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>确认导入配置</AlertDialogTitle>
+        <AlertDialogDescription>
+          导入配置将覆盖当前设置并同步到云端。确定要继续吗？
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel @click="importConfirmDialogOpen = false">取消</AlertDialogCancel>
+        <AlertDialogAction @click="handleConfirmImport">确认导入</AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>

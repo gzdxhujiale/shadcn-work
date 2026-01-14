@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { defaultSidebarConfig } from '@/config/sidebar'
 import { page1Configs as defaultPage1Configs } from '@/config/page1'
+import { supabase } from '@/lib/supabase'
 
 // ============================================
 // 导航配置类型定义
@@ -847,11 +848,17 @@ export function getPage1Config(navId: string): Page1Config | undefined {
             }))
         }))
 
-        // 构建页面配置（排除 mockData 函数）
+        // 构建页面配置（只导出已知字段，排除 mockData 和废弃的 actions 字段）
         const exportPageConfigs: Record<string, Omit<Page1Config, 'mockData'>> = {}
         Object.entries(page1Configs.value).forEach(([navId, config]) => {
-            const { mockData: _, ...rest } = config as Page1Config & { mockData?: () => any[] }
-            exportPageConfigs[navId] = rest
+            // 显式列出要导出的字段，排除废弃字段
+            exportPageConfigs[navId] = {
+                ...(config.topBar && { topBar: config.topBar }),
+                filterArea: config.filterArea,
+                ...(config.actionsArea && { actionsArea: config.actionsArea }),
+                ...(config.cardArea && { cardArea: config.cardArea }),
+                tableArea: config.tableArea,
+            }
         })
 
         return {
@@ -936,10 +943,14 @@ export function getPage1Config(navId: string): Page1Config | undefined {
 
             // 导入页面配置
             if (data.pageConfigs) {
-                Object.entries(data.pageConfigs).forEach(([navId, config]) => {
-                    // 合并或覆盖配置
+                Object.entries(data.pageConfigs).forEach(([navId, config]: [string, any]) => {
+                    // 显式列出要导入的字段，排除废弃的 actions 字段
                     page1Configs.value[navId] = {
-                        ...config,
+                        ...(config.topBar && { topBar: config.topBar }),
+                        filterArea: config.filterArea,
+                        ...(config.actionsArea && { actionsArea: config.actionsArea }),
+                        ...(config.cardArea && { cardArea: config.cardArea }),
+                        tableArea: config.tableArea,
                         mockData: mockDataFunctions.value[navId] || (() => [])
                     } as Page1Config
                 })
@@ -950,6 +961,116 @@ export function getPage1Config(navId: string): Page1Config | undefined {
             console.error('Failed to import config:', e)
             return { success: false, message: '导入失败: ' + (e as Error).message }
         }
+    }
+
+    // ============================================
+    // Supabase 云端配置存储
+    // ============================================
+
+    /**
+     * 保存配置到 Supabase
+     */
+    async function saveToSupabase(): Promise<{ success: boolean; message: string }> {
+        try {
+            // 获取当前用户
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                return { success: false, message: '用户未登录' }
+            }
+
+            const exportData = exportFullConfig()
+
+            const { error } = await supabase
+                .from('user_configs')
+                .upsert(
+                    {
+                        user_id: user.id,
+                        config_data: exportData,
+                        updated_at: new Date().toISOString()
+                    },
+                    { onConflict: 'user_id' }
+                )
+
+            if (error) {
+                console.error('Failed to save to Supabase:', error)
+                return { success: false, message: error.message }
+            }
+
+            return { success: true, message: '配置已保存到云端' }
+        } catch (e) {
+            console.error('Failed to save to Supabase:', e)
+            return { success: false, message: '保存失败: ' + (e as Error).message }
+        }
+    }
+
+    /**
+     * 从 Supabase 加载配置
+     */
+    async function loadFromSupabase(): Promise<{ success: boolean; message: string }> {
+        try {
+            // 获取当前用户
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                return { success: false, message: '用户未登录' }
+            }
+
+            const { data, error } = await supabase
+                .from('user_configs')
+                .select('config_data')
+                .eq('user_id', user.id)
+                .single()
+
+            if (error) {
+                // PGRST116 表示没有找到记录
+                if (error.code === 'PGRST116') {
+                    console.log('用户没有云端配置，使用默认配置')
+                    // 清除 localStorage，使用纯默认配置
+                    localStorage.removeItem(STORAGE_KEY_PAGE1_CONFIGS)
+                    resetToDefaults()
+                    return { success: true, message: '使用默认配置' }
+                }
+                console.error('Failed to load from Supabase:', error)
+                return { success: false, message: error.message }
+            }
+
+            if (data?.config_data) {
+                // 先清除 localStorage，确保使用云端数据
+                localStorage.removeItem(STORAGE_KEY_PAGE1_CONFIGS)
+                // 先重置为默认配置，再导入云端配置
+                resetToDefaults()
+                const result = importFullConfig(data.config_data)
+                if (result.success) {
+                    console.log('已从云端加载配置')
+                    // 将云端配置同步到 localStorage
+                    savePage1ConfigsToStorage(page1Configs.value)
+                }
+                return result
+            }
+
+            return { success: true, message: '配置加载成功' }
+        } catch (e) {
+            console.error('Failed to load from Supabase:', e)
+            return { success: false, message: '加载失败: ' + (e as Error).message }
+        }
+    }
+
+    /**
+     * 导入 JSON 配置并同步到云端
+     */
+    async function importAndSyncToCloud(data: ExportData): Promise<{ success: boolean; message: string }> {
+        // 先导入到本地
+        const importResult = importFullConfig(data)
+        if (!importResult.success) {
+            return importResult
+        }
+
+        // 再同步到云端
+        const saveResult = await saveToSupabase()
+        if (!saveResult.success) {
+            return { success: false, message: `导入成功但同步失败: ${saveResult.message}` }
+        }
+
+        return { success: true, message: '配置导入并同步成功' }
     }
 
     return {
@@ -980,5 +1101,9 @@ export function getPage1Config(navId: string): Page1Config | undefined {
         getTemplateConfig,
         exportFullConfig,
         importFullConfig,
+        // Supabase Actions
+        saveToSupabase,
+        loadFromSupabase,
+        importAndSyncToCloud,
     }
 })
