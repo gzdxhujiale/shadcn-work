@@ -43,7 +43,7 @@ const selectedRows = ref<number[]>([])
 
 // 分页
 const currentPage = ref(1)
-const pageSize = 15
+const pageSize = computed(() => pageConfig.value?.tableArea.pageSize || 15)
 
 // 顶部栏状态
 const currentApp = ref(pageConfig.value?.topBar?.appOptions?.[0] ?? '')
@@ -52,12 +52,75 @@ const currentLang = ref(pageConfig.value?.topBar?.langOptions?.[0] ?? '')
 // 从配置自动生成筛选状态
 const filters = reactive<Record<string, any>>({})
 
+// 根据 mockFormat 生成虚拟数据
+function generateMockValue(format: string | undefined, label: string, index: number): string | number {
+  switch (format) {
+    case 'text':
+      // 文本格式：标签名 + 数字
+      return `${label}${index + 1}`
+    case 'datetime':
+      // 时间格式：随机日期时间
+      const now = new Date()
+      const randomDays = Math.floor(Math.random() * 30)
+      const randomHours = Math.floor(Math.random() * 24)
+      const randomMinutes = Math.floor(Math.random() * 60)
+      const randomSeconds = Math.floor(Math.random() * 60)
+      const date = new Date(now.getTime() - randomDays * 24 * 60 * 60 * 1000)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      const h = String(randomHours).padStart(2, '0')
+      const m = String(randomMinutes).padStart(2, '0')
+      const s = String(randomSeconds).padStart(2, '0')
+      return `${year}-${month}-${day} ${h}:${m}:${s}`
+    case 'number':
+      // 数字格式：随机5位数
+      return Math.floor(10000 + Math.random() * 90000)
+    default:
+      // 默认返回空或占位值
+      return `${label}${index + 1}`
+  }
+}
+
+// 根据配置生成模拟数据
+function generateMockData(): any[] {
+  if (!pageConfig.value) return []
+  
+  const columns = pageConfig.value.tableArea.columns
+  const rowCount = 20 // 生成20行数据
+  const data: any[] = []
+  
+  for (let i = 0; i < rowCount; i++) {
+    const row: Record<string, any> = { id: i + 1 }
+    
+    columns.forEach(col => {
+      if (col.mockFormat) {
+        row[col.key] = generateMockValue(col.mockFormat, col.label, i)
+      } else {
+        // 如果没有指定格式，使用默认值
+        row[col.key] = `${col.label}${i + 1}`
+      }
+    })
+    
+    data.push(row)
+  }
+  
+  return data
+}
+
 // 加载数据函数
 function loadData() {
   if (pageConfig.value?.mockData) {
-    tableData.value = pageConfig.value.mockData()
+    const mockData = pageConfig.value.mockData()
+    // 如果 mockData 返回空数组，尝试根据列配置生成数据
+    if (mockData.length === 0) {
+      tableData.value = generateMockData()
+    } else {
+      tableData.value = mockData
+    }
   } else {
-    tableData.value = []
+    // 没有 mockData 函数，根据列配置生成
+    tableData.value = generateMockData()
   }
   currentPage.value = 1
   selectedRows.value = []
@@ -86,10 +149,10 @@ const filteredData = computed(() => {
 })
 
 const paginatedData = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredData.value.slice(start, start + pageSize)
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredData.value.slice(start, start + pageSize.value)
 })
-const totalPages = computed(() => Math.ceil(filteredData.value.length / pageSize) || 1)
+const totalPages = computed(() => Math.ceil(filteredData.value.length / pageSize.value) || 1)
 
 // 可见的筛选项
 const visibleFilters = computed(() => {
@@ -372,6 +435,16 @@ const getStatusClass = (status: string) => {
                   >
                     {{ item[col.key] }}
                   </Badge>
+                  <!-- 文字按钮类型 -->
+                  <Button
+                    v-else-if="col.type === 'text-button'"
+                    variant="link"
+                    size="sm"
+                    class="h-auto p-0 text-blue-600 hover:text-blue-700"
+                    @click.stop="console.log('Clicked:', item[col.key])"
+                  >
+                    {{ item[col.key] }}
+                  </Button>
                   <!-- 普通文本类型 -->
                   <span v-else class="text-sm">{{ item[col.key] }}</span>
                 </TableCell>

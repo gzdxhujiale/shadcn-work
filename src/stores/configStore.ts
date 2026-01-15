@@ -590,9 +590,10 @@ export interface TableColumn {
     label: string
     width?: string                    // 列宽，如 '100px'
     minWidth?: string                 // 最小宽度
-    type?: 'text' | 'badge' | 'status-badge'
+    type?: 'text' | 'badge' | 'status-badge' | 'text-button'
     fixed?: 'left' | 'right'          // 列固定位置
     visible?: boolean
+    mockFormat?: 'text' | 'datetime' | 'number' // 虚拟数据格式
 }
 
 /**
@@ -605,6 +606,7 @@ export interface TableAreaConfig {
     scrollY?: boolean       // 是否启用纵向滚动
     showCheckbox?: boolean  // 是否显示复选框列
     fixedLayout?: boolean   // 是否使用固定布局
+    pageSize?: number       // 每页显示行数
     columns: TableColumn[]
 }
 
@@ -757,6 +759,7 @@ export const page1Configs: Record<string, Page1Config> = {
                 if (col.type) code += `, type: '${col.type}'`
                 if (col.fixed) code += `, fixed: '${col.fixed}'`
                 if (col.visible === false) code += `, visible: false`
+                if (col.mockFormat) code += `, mockFormat: '${col.mockFormat}'`
                 code += ` },\n`
             })
             code += `            ],\n`
