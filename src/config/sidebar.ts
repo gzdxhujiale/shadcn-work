@@ -2,7 +2,6 @@ import { ref, computed, h } from 'vue'
 import {
     AudioWaveform,
     Command,
-    SquareTerminal,
     type LucideIcon,
 } from 'lucide-vue-next'
 
@@ -10,12 +9,15 @@ import {
 // 类型定义
 // ============================================
 
+import type { Page1Config } from './page1'
+
 export interface NavSubItem {
     id: string
     title: string
     url: string
     badge?: string // 可选徽章
     template?: 'Page1' | 'Page2' | '' // 使用的页面模板
+    component?: Page1Config // 内嵌页面配置 (Phase 2)
 }
 
 
@@ -143,26 +145,8 @@ export const defaultSidebarConfig: SidebarConfig = {
         },
     ],
 
-    navGroups: [
-        {
-            label: '平台',
-            showLabel: false,
-            items: [
-                {
-                    id: 'workspace',
-                    title: '提现管理',
-                    url: '#',
-                    icon: SquareTerminal,
-                    isOpen: true, // 设置为 true 则默认展开
-                    items: [
-                        { id: '1', title: '提现', url: '#', template: 'Page1' },
-                        { id: '2', title: '转账', url: '#', template: 'Page1' },
-                        { id: '4', title: '提现黑名单', url: '#', template: '' },
-                    ],
-                },
-            ],
-        },
-    ],
+    // navGroups 默认为空数组 - 配置从云端加载
+    navGroups: [],
 
     projectGroups: [
         {
@@ -255,19 +239,33 @@ export function createProjectGroup(
 // 导航状态管理
 // ============================================
 
-// 从配置中获取默认导航
-const firstNavGroup = defaultSidebarConfig.navGroups[0]
-const firstMainNav = firstNavGroup?.items[0]
-const firstSubNav = firstMainNav?.items?.[0]
-
 // 导航状态（模块级别的单例状态）
-const currentMainNav = ref(firstMainNav?.title ?? '')
-const currentSubNav = ref(firstSubNav?.title ?? '')
-const _currentNavId = ref(firstSubNav?.id ?? '')
+const currentMainNav = ref('')
+const currentSubNav = ref('')
+const _currentNavId = ref('')
 const detailTitle = ref<string | null>(null)
 
 // 外部注入的 navGroups 引用（来自 configStore，避免循环依赖）
 const _navGroupsRef = ref<NavGroup[] | null>(null)
+
+/**
+ * 初始化导航状态（在配置加载后调用）
+ */
+export function initNavigation(navGroups: NavGroup[]) {
+    if (!navGroups || navGroups.length === 0) return
+
+    const firstNavGroup = navGroups[0]
+    const firstMainNav = firstNavGroup?.items[0]
+    const firstSubNav = firstMainNav?.items?.[0]
+
+    if (firstMainNav) {
+        currentMainNav.value = firstMainNav.title
+        if (firstSubNav) {
+            currentSubNav.value = firstSubNav.title
+            _currentNavId.value = firstSubNav.id
+        }
+    }
+}
 
 /**
  * 设置 navGroups 引用（由 configStore 调用）
@@ -288,8 +286,9 @@ export function useNavigation() {
         if (navId) {
             _currentNavId.value = navId
         } else {
-            // 如果没有传 navId，尝试从配置中查找
-            for (const group of defaultSidebarConfig.navGroups) {
+            // 如果没有传 navId，尝试从配置中查找（使用云端配置）
+            const navGroups = _navGroupsRef.value || []
+            for (const group of navGroups) {
                 for (const mainItem of group.items) {
                     const subItem = mainItem.items?.find(item => item.title === subNav)
                     if (subItem) {
@@ -320,7 +319,7 @@ export function useNavigation() {
     // 注意：需要从外部注入 configStore 的 navGroups 引用以避免循环依赖
     // 这里先从默认配置查找，configStore 会在加载后更新
     const currentTemplate = computed(() => {
-        // 优先从 _navGroupsRef 查找（由 configStore 注入）
+        // 从 _navGroupsRef 查找（由 configStore 注入的云端配置）
         if (_navGroupsRef.value) {
             for (const group of _navGroupsRef.value) {
                 for (const mainItem of group.items) {
@@ -328,16 +327,10 @@ export function useNavigation() {
                     if (subItem?.template) {
                         return subItem.template
                     }
-                }
-            }
-        }
-
-        // 回退：从默认配置查找
-        for (const group of defaultSidebarConfig.navGroups) {
-            for (const mainItem of group.items) {
-                const subItem = mainItem.items?.find(item => item.id === _currentNavId.value)
-                if (subItem?.template) {
-                    return subItem.template
+                    // Phase 2: Support component field (implies Page1)
+                    if (subItem?.component) {
+                        return 'Page1'
+                    }
                 }
             }
         }

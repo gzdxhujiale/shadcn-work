@@ -1,0 +1,81 @@
+{
+    "Configs": [
+        {
+            "label": "平台",
+            "showLabel": false,
+            "navitems": [
+                {
+                    "id": "root-nav",
+                    "title": "系统导航",
+                    "isOpen": true,
+                    "items": [
+                        {
+                            "id": "<GENERATED_PAGE_ID>",
+                            "title": "<页面中文名称>",
+                            "component": {
+                                "filterArea": {
+                                    "columns": 4,
+                                    "gap": "16px",
+                                    "filters": [
+                                        {
+                                            "key": "<englishKey>",
+                                            "type": "<input 或 select>",
+                                            "label": "<中文标签>",
+                                            "placeholder": "请输入<中文标签>",
+                                            "defaultValue": "",
+                                            "options": [
+                                                "<Option1>",
+                                                "<Option2>"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                "actionsArea": {
+                                    "show": true,
+                                    "buttons": [
+                                        {
+                                            "key": "search",
+                                            "label": "查询",
+                                            "variant": "outline"
+                                        },
+                                        {
+                                            "key": "reset",
+                                            "label": "重置",
+                                            "variant": "outline"
+                                        }
+                                    ]
+                                },
+                                "cardArea": {
+                                    "show": false,
+                                    "columns": 4,
+                                    "gap": "16px",
+                                    "cards": [
+                                        {
+                                            "key": "<statKey>",
+                                            "data": "0",
+                                            "title": "<统计标题>"
+                                        }
+                                    ]
+                                },
+                                "tableArea": {
+                                    "height": "500px",
+                                    "scrollX": true,
+                                    "scrollY": true,
+                                    "showCheckbox": true,
+                                    "fixedLayout": true,
+                                    "columns": [
+                                        {
+                                            "key": "<englishKey>",
+                                            "label": "<中文标签>",
+                                            "width": "<80px 或 150px>"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

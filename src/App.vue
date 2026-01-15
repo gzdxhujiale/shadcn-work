@@ -18,7 +18,6 @@ import "vue-sonner/style.css"
 
 // 导入页面模板
 import Page1 from '@/components/templates/Page1.vue'
-import PlaceholderPage from '@/components/pages/PlaceholderPage.vue'
 import Settings from '@/components/pages/Settings.vue'
 import AuthPage from '@/components/pages/AuthPage.vue'
 import SkeletonLoading from '@/components/shared/SkeletonLoading.vue'
@@ -45,8 +44,8 @@ const pageComponents: Record<string, any> = {
   // Page2, // 后续添加更多模板时，在此注册...
 }
 
-// 当前显示的组件 - 未注册的模板显示占位组件
-const CurrentPageComponent = computed(() => pageComponents[currentPage.value] || PlaceholderPage)
+// 当前显示的组件 - 如果未找到模板则显示空白占位
+const CurrentPageComponent = computed(() => pageComponents[currentPage.value])
 
 // 点击第二级面包屑返回列表
 const handleSubNavClick = () => {
@@ -81,8 +80,8 @@ useNetworkStatus()
 </script>
 
 <template>
-  <!-- Loading state: show skeleton -->
-  <SkeletonLoading v-if="authStore.isLoading" />
+  <!-- Loading state: show skeleton while auth or config is loading -->
+  <SkeletonLoading v-if="authStore.isLoading || configStore.isConfigLoading" />
 
   <!-- Not authenticated: show login page -->
   <AuthPage v-else-if="!authStore.isAuthenticated" />

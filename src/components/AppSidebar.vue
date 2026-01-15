@@ -35,11 +35,11 @@ const sidebarConfig = props.config ?? defaultSidebarConfig
 // 当前选中的团队
 const activeTeam = ref(sidebarConfig.teams[0])
 
-// 根据权限过滤导航菜单 - 从 Pinia store 读取
+// 根据权限过滤导航菜单 - 从 Pinia store 读取（支持预览模式）
 const filteredNavGroups = computed(() => {
   const team = activeTeam.value
-  // 使用 store 的 navGroups
-  const navGroups = configStore.navGroups
+  // 使用 store 的 effectiveNavGroups 以支持预览模式
+  const navGroups = configStore.effectiveNavGroups
   
   if (!team || !team.permissions) return navGroups
 
@@ -105,6 +105,9 @@ const filteredProjectGroups = computed(() => {
     }).filter(group => group.projects.length > 0)
 })
 
+// 是否处于预览模式
+const isInPreviewMode = computed(() => configStore.isInPreviewMode)
+const previewMode = computed(() => configStore.previewMode)
 </script>
 
 <template>
@@ -112,8 +115,15 @@ const filteredProjectGroups = computed(() => {
     :collapsible="props.collapsible"
     :side="props.side"
     :variant="props.variant"
+    :class="{ 'preview-mode': isInPreviewMode }"
   >
     <SidebarHeader>
+      <!-- 预览模式指示器 -->
+      <div v-if="isInPreviewMode" class="preview-indicator">
+        <span class="preview-badge">
+          {{ previewMode === 'override' ? '覆盖预览' : '追加预览' }}
+        </span>
+      </div>
       <!-- 传递 v-model 绑定 activeTeam -->
       <TeamSwitcher 
         :teams="sidebarConfig.teams" 
@@ -146,3 +156,35 @@ const filteredProjectGroups = computed(() => {
     <SidebarRail />
   </Sidebar>
 </template>
+
+<style scoped>
+.preview-mode {
+  border: 2px solid rgba(139, 92, 246, 0.5);
+  box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.1);
+}
+
+.preview-indicator {
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.preview-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 12px;
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.8);
+  }
+}
+</style>

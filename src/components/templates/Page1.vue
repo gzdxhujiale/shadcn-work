@@ -30,7 +30,9 @@ const configStore = useConfigStore()
 
 // --- 获取当前页面配置 ---
 const pageConfig = computed<Page1Config | undefined>(() => {
-  return configStore.getPage1Config(currentNavId.value)
+  const config = configStore.getPage1Config(currentNavId.value)
+  console.log('Page1: Resolving config for ID:', currentNavId.value, 'Found:', !!config)
+  return config
 })
 
 // --- 响应式数据 ---
@@ -145,32 +147,35 @@ const getStatusClass = (status: string) => {
   <div v-if="pageConfig" class="h-full flex flex-col">
     <!-- 顶部操作栏 Teleport -->
     <Teleport to="#breadcrumb-actions" defer>
-      <div v-if="pageConfig.topBar" class="flex items-center gap-4">
-        <!-- App 选择 -->
-        <Select v-if="pageConfig.topBar.appOptions" v-model="currentApp">
-          <SelectTrigger class="w-[120px] h-8 text-xs">
-            <SelectValue placeholder="选择应用" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="app in pageConfig.topBar.appOptions" :key="app" :value="app">
-              {{ app }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+      <div class="flex items-center gap-4">
+        <!-- topBar 选择器（如果配置了的话） -->
+        <template v-if="pageConfig.topBar">
+          <!-- App 选择 -->
+          <Select v-if="pageConfig.topBar.appOptions" v-model="currentApp">
+            <SelectTrigger class="w-[120px] h-8 text-xs">
+              <SelectValue placeholder="选择应用" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="app in pageConfig.topBar.appOptions" :key="app" :value="app">
+                {{ app }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
-        <!-- 语言选择 -->
-        <Select v-if="pageConfig.topBar.langOptions" v-model="currentLang">
-          <SelectTrigger class="w-[100px] h-8 text-xs">
-            <SelectValue placeholder="选择语言" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="lang in pageConfig.topBar.langOptions" :key="lang" :value="lang">
-              {{ lang }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+          <!-- 语言选择 -->
+          <Select v-if="pageConfig.topBar.langOptions" v-model="currentLang">
+            <SelectTrigger class="w-[100px] h-8 text-xs">
+              <SelectValue placeholder="选择语言" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="lang in pageConfig.topBar.langOptions" :key="lang" :value="lang">
+                {{ lang }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </template>
 
-        <!-- 功能按钮 -->
+        <!-- 功能按钮 (始终显示的全局按钮) -->
         <div class="flex items-center gap-2">
            <Button variant="ghost" size="sm" class="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 font-normal">
              更新记录
@@ -409,7 +414,9 @@ const getStatusClass = (status: string) => {
   </div>
 
   <!-- 无配置时显示占位 -->
-  <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-    <p>页面配置未找到 (navId: {{ currentNavId }})</p>
+  <div v-else class="flex flex-col items-center justify-center h-full text-muted-foreground">
+      <p class="text-lg font-medium">配置未找到</p>
+      <p class="text-sm">Config ID: {{ currentNavId }}</p>
+      <p class="text-xs text-muted-foreground mt-2">请检查配置导入日志</p>
   </div>
 </template>
