@@ -302,10 +302,8 @@ const getStatusClass = (status: string) => {
           </div>
 
           <!-- 底部操作按钮 -->
-          <div v-if="pageConfig.actionsArea?.show !== false" class="flex items-center justify-between pt-2 border-t">
-            <div class="text-xs text-muted-foreground">
-              已选择 <span class="font-semibold text-foreground">{{ selectedRows.length }}</span> 条记录
-            </div>
+          <div v-if="pageConfig.actionsArea?.show !== false" class="flex items-center justify-end pt-2 border-t">
+
             
             <div class="flex items-center gap-3">
               <template v-for="(action, index) in visibleActions" :key="action.key">
@@ -436,15 +434,30 @@ const getStatusClass = (status: string) => {
                     {{ item[col.key] }}
                   </Badge>
                   <!-- 文字按钮类型 -->
-                  <Button
-                    v-else-if="col.type === 'text-button'"
-                    variant="link"
-                    size="sm"
-                    class="h-auto p-0 text-blue-600 hover:text-blue-700"
-                    @click.stop="console.log('Clicked:', item[col.key])"
-                  >
-                    {{ item[col.key] }}
-                  </Button>
+                  <div v-else-if="col.type === 'text-button'" class="flex items-center gap-2">
+                    <template v-if="col.buttons && col.buttons.length > 0">
+                      <template v-for="(btn, idx) in col.buttons" :key="idx">
+                        <div v-if="idx > 0" class="w-px h-3 bg-border"></div>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          class="h-auto p-0 text-blue-600 hover:text-blue-700"
+                          @click.stop="console.log('Clicked:', btn, item)"
+                        >
+                          {{ btn }}
+                        </Button>
+                      </template>
+                    </template>
+                    <Button
+                      v-else
+                      variant="link"
+                      size="sm"
+                      class="h-auto p-0 text-blue-600 hover:text-blue-700"
+                      @click.stop="console.log('Clicked:', item[col.key])"
+                    >
+                      {{ item[col.key] }}
+                    </Button>
+                  </div>
                   <!-- 普通文本类型 -->
                   <span v-else class="text-sm">{{ item[col.key] }}</span>
                 </TableCell>

@@ -594,6 +594,7 @@ export interface TableColumn {
     fixed?: 'left' | 'right'          // 列固定位置
     visible?: boolean
     mockFormat?: 'text' | 'datetime' | 'number' // 虚拟数据格式
+    buttons?: string[] // 文字按钮列表
 }
 
 /**
@@ -760,6 +761,9 @@ export const page1Configs: Record<string, Page1Config> = {
                 if (col.fixed) code += `, fixed: '${col.fixed}'`
                 if (col.visible === false) code += `, visible: false`
                 if (col.mockFormat) code += `, mockFormat: '${col.mockFormat}'`
+                if (col.buttons && col.buttons.length > 0) {
+                    code += `, buttons: [${col.buttons.map(b => `'${b}'`).join(', ')}]`
+                }
                 code += ` },\n`
             })
             code += `            ],\n`

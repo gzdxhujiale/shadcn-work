@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { Send, Trash2, Sparkles, Loader2, Check, XIcon, Minus, Replace, Plus, Eye } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,77 @@ const isConfigured = computed(() => aiStore.isConfigured)
 const hasPreviewConfig = computed(() => aiStore.hasPreviewConfig)
 const previewMode = computed(() => aiStore.previewMode)
 const changeSummary = computed(() => aiStore.changeSummary)
+const buttonPosition = computed(() => aiStore.buttonPosition)
 // previewOverrideConfig and previewAppendConfig removed (handled in store)
+
+// Window Dimensions for calculation
+const windowWidth = ref(window.innerWidth)
+const windowHeight = ref(window.innerHeight)
+
+const updateDimensions = () => {
+    windowWidth.value = window.innerWidth
+    windowHeight.value = window.innerHeight
+}
+
+onMounted(() => {
+    window.addEventListener('resize', updateDimensions)
+})
+
+onUnmounted(() => {
+    window.removeEventListener('resize', updateDimensions)
+})
+
+// Dynamic Window Position & Style
+const windowStyle = computed(() => {
+    const btnX = buttonPosition.value.x
+    const btnY = buttonPosition.value.y
+    const btnSize = 64
+    const gap = 16
+    const winW = windowWidth.value
+    const winH = windowHeight.value
+    
+    const style: any = {}
+    
+    // Horizontal Positioning
+    if (btnX > winW / 2) {
+        // Right side
+        // Calculate theoretical right based on button
+        let right = winW - (btnX + btnSize)
+        // Clamp to ensure it doesn't go offscreen (min 16px from edge)
+        right = Math.max(16, right)
+        
+        style.right = `${right}px`
+        style.left = 'auto'
+        style.transformOrigin = 'bottom right'
+    } else {
+        // Left side
+        let left = btnX
+        // Clamp
+        left = Math.max(16, left)
+        
+        style.left = `${left}px`
+        style.right = 'auto'
+        style.transformOrigin = 'bottom left'
+    }
+    
+    // Vertical Positioning
+    if (btnY > winH / 2) {
+        // Bottom side - expand upwards
+        style.bottom = `${winH - btnY + gap}px`
+        style.top = 'auto'
+        if (style.transformOrigin) style.transformOrigin = style.transformOrigin.replace('top', 'bottom')
+        style.maxHeight = isMinimized.value ? '80px' : `${btnY - gap - 20}px` // constrained by top space
+    } else {
+        // Top side - expand downwards
+        style.top = `${btnY + btnSize + gap}px`
+        style.bottom = 'auto'
+        // fix origin if needed (default is right/left only above)
+        style.transformOrigin = style.transformOrigin.replace('bottom', 'top')
+        style.maxHeight = isMinimized.value ? '80px' : `${winH - (btnY + btnSize + gap) - 20}px`
+    }
+    
+    return style
+})
 
 // Auto-scroll to bottom when new messages arrive
 watch(messages, async () => {
@@ -74,7 +144,12 @@ function formatTime(date: Date): string {
 
 <template>
     <Transition name="slide-up">
-        <div v-if="isOpen" class="ai-chat-window" :class="{ 'is-minimized': isMinimized }">
+        <div 
+            v-if="isOpen" 
+            class="ai-chat-window" 
+            :class="{ 'is-minimized': isMinimized }"
+            :style="windowStyle"
+        >
             <!-- Header -->
             <div class="chat-header">
                 <div class="header-title">
@@ -285,8 +360,7 @@ function formatTime(date: Date): string {
 /* Main Window Container */
 .ai-chat-window {
     position: fixed;
-    right: 24px;
-    bottom: 160px;
+    /* right/bottom handled by JS */
     width: 420px;
     max-width: calc(100vw - 48px);
     height: 650px;

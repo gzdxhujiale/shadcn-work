@@ -1,0 +1,76 @@
+{
+    "version": "2.0",
+    "exportedAt": "2026-01-15T00:00:00.000Z",
+    "navGroups": [
+        {
+            "label": "平台",
+            "showLabel": false,
+            "items": [
+                {
+                    "id": "root-nav",
+                    "title": "系统导航",
+                    "isOpen": true,
+                    "items": [
+                        {
+                            "id": "demo-page",
+                            "title": "示例页面",
+                            "url": "#/demo",
+                            "template": "Page1"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "pageConfigs": {
+        "demo-page": {
+            "filterArea": {
+                "columns": 4,
+                "gap": "16px",
+                "filters": [
+                    {
+                        "key": "keyword",
+                        "type": "input",
+                        "label": "关键词",
+                        "placeholder": "请输入"
+                    }
+                ]
+            },
+            "actionsArea": {
+                "show": true,
+                "buttons": [
+                    {
+                        "key": "add",
+                        "label": "新增",
+                        "variant": "default"
+                    }
+                ]
+            },
+            "cardArea": {
+                "show": false,
+                "columns": 4,
+                "gap": "16px",
+                "cards": []
+            },
+            "tableArea": {
+                "height": "500px",
+                "scrollX": true,
+                "scrollY": true,
+                "showCheckbox": true,
+                "fixedLayout": true,
+                "columns": [
+                    {
+                        "key": "id",
+                        "label": "ID",
+                        "width": "80px"
+                    },
+                    {
+                        "key": "name",
+                        "label": "名称",
+                        "width": "150px"
+                    }
+                ]
+            }
+        }
+    }
+}

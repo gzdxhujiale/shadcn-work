@@ -37,6 +37,9 @@ export const useAIStore = defineStore('ai', () => {
     const isMinimized = ref(false)                       // 窗口是否最小化
     const changeSummary = ref<ChangeSummary | null>(null) // 变更摘要
 
+    // Position State
+    const buttonPosition = ref({ x: window.innerWidth - 88, y: window.innerHeight - 144 }) // Default position
+
     // Getters
     const isConfigured = computed(() => isCozeConfigured())
 
@@ -509,6 +512,10 @@ export const useAIStore = defineStore('ai', () => {
         configStore.clearPreviewConfig()
     }
 
+    function setButtonPosition(x: number, y: number) {
+        buttonPosition.value = { x, y }
+    }
+
     return {
         // State
         messages,
@@ -516,6 +523,7 @@ export const useAIStore = defineStore('ai', () => {
         isLoading,
         pendingConfig,
         streamingContent,
+        buttonPosition,
         // Preview State
         previewMode,
         previewOverrideConfig,
@@ -542,6 +550,7 @@ export const useAIStore = defineStore('ai', () => {
         generatePreviewConfigs,
         confirmPreview,
         cancelPreview,
-        clearPreview
+        clearPreview,
+        setButtonPosition
     }
 })

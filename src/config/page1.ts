@@ -70,6 +70,7 @@ export interface TableColumn {
     fixed?: 'left' | 'right'          // 列固定位置
     visible?: boolean
     mockFormat?: 'text' | 'datetime' | 'number' // 虚拟数据格式
+    buttons?: string[] // 文字按钮列表
 }
 
 /**

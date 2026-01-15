@@ -126,6 +126,7 @@ const columnForm = ref({
   width: '100px',
   type: 'text' as 'text' | 'badge' | 'status-badge' | 'text-button',
   mockFormat: 'none' as 'none' | 'text' | 'datetime' | 'number',
+  buttons: '', // 按钮列表，逗号分隔
 })
 
 // Action Button Dialog State
@@ -466,7 +467,7 @@ const toggleActionVisibility = (index: number) => {
 
 const openAddColumnDialog = () => {
   editingColumnIndex.value = null
-  columnForm.value = { key: '', label: '', width: '100px', type: 'text', mockFormat: 'none' }
+  columnForm.value = { key: '', label: '', width: '100px', type: 'text', mockFormat: 'none', buttons: '' }
   columnDialogOpen.value = true
 }
 
@@ -484,7 +485,10 @@ const handleSaveColumn = () => {
         label: columnForm.value.label,
         width: columnForm.value.width || undefined,
         type: columnForm.value.type === 'text' ? undefined : columnForm.value.type,
-        mockFormat: columnForm.value.mockFormat === 'none' ? undefined : columnForm.value.mockFormat
+        mockFormat: columnForm.value.mockFormat === 'none' ? undefined : columnForm.value.mockFormat,
+        buttons: columnForm.value.type === 'text-button' && columnForm.value.buttons 
+          ? columnForm.value.buttons.split(/[，,]/).map(s => s.trim()).filter(s => s) 
+          : undefined
       }
       
       if (editingColumnIndex.value !== null) {
@@ -1765,6 +1769,12 @@ const handleSaveToCloud = async () => {
               </SelectContent>
             </Select>
           </div>
+        </div>
+        <!-- 按钮列表配置 -->
+        <div v-if="columnForm.type === 'text-button'" class="space-y-2">
+          <label class="text-sm font-medium">按钮列表 (逗号分隔)</label>
+          <Input v-model="columnForm.buttons" placeholder="如 增加, 删除" />
+          <p class="text-xs text-muted-foreground">多个按钮之间用逗号分隔</p>
         </div>
         <!-- 虚拟数据格式 -->
         <div class="space-y-2">
