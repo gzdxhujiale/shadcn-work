@@ -1,18 +1,22 @@
 {
-  "name": "shadcn-work",
+  "name": "aigen-ui",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && npx -y gh-pages -d dist"
   },
   "dependencies": {
+    "@ai-sdk/ui-utils": "^1.2.11",
     "@internationalized/date": "^3.10.1",
+    "@supabase/supabase-js": "^2.90.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/vue-table": "^8.21.3",
     "@vueuse/core": "^14.1.0",
+    "ai": "^6.0.33",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

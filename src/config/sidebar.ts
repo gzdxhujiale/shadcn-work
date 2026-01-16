@@ -1,9 +1,7 @@
-import { ref, computed } from 'vue'
+import { ref, computed, h } from 'vue'
 import {
     AudioWaveform,
     Command,
-    GalleryVerticalEnd,
-    SquareTerminal,
     type LucideIcon,
 } from 'lucide-vue-next'
 
@@ -11,12 +9,15 @@ import {
 // 类型定义
 // ============================================
 
+import type { Page1Config } from './page1'
+
 export interface NavSubItem {
     id: string
     title: string
     url: string
     badge?: string // 可选徽章
     template?: 'Page1' | 'Page2' | '' // 使用的页面模板
+    component?: Page1Config // 内嵌页面配置 (Phase 2)
 }
 
 
@@ -92,6 +93,9 @@ export interface SidebarConfig {
 // 默认配置数据
 // ============================================
 
+// Custom Logo Component
+const AIGenLogo = (props: any) => h('img', { src: import.meta.env.BASE_URL + 'ai.svg', ...props, style: 'width: 100%; height: 100%; object-fit: contain;' })
+
 export const defaultSidebarConfig: SidebarConfig = {
     user: {
         name: ' ',
@@ -101,8 +105,8 @@ export const defaultSidebarConfig: SidebarConfig = {
 
     teams: [
         {
-            name: '创新中台',
-            logo: GalleryVerticalEnd,
+            name: 'AIGen UI',
+            logo: AIGenLogo, // Using custom logo
             plan: 'online',
             permissions: {
                 navMain: 'all',
@@ -110,27 +114,27 @@ export const defaultSidebarConfig: SidebarConfig = {
             }
         },
         {
-            name: '财务部',
+            name: 'A部门',
             logo: AudioWaveform,
-            plan: '财务BI',
+            plan: 'online',
             permissions: {
                 navMain: ['workspace', 'report', 'dashboard'],
                 projects: ['data-dictionary', 'user-manual']
             }
         },
         {
-            name: 'IT部',
+            name: 'B部门',
             logo: Command,
-            plan: '运维管理',
+            plan: 'online',
             permissions: {
                 navMain: ['rbac', 'settings'],
                 projects: ['user-manual']
             }
         },
         {
-            name: '公司经营分析',
+            name: 'C部门',
             logo: Command,
-            plan: '数据分析',
+            plan: 'online',
             permissions: {
                 navMain: ['report', 'dashboard'],
                 navItems: {
@@ -141,34 +145,8 @@ export const defaultSidebarConfig: SidebarConfig = {
         },
     ],
 
-    navGroups: [
-        {
-            label: '平台',
-            showLabel: false,
-            items: [
-                {
-                    id: 'workspace',
-                    title: '提现管理',
-                    url: '#',
-                    icon: SquareTerminal,
-                    isOpen: true, // 设置为 true 则默认展开
-                    items: [
-                        { id: '1', title: '提现', url: '#', template: 'Page1' },
-                        { id: '2', title: '提现币商代发薪资', url: '#', template: 'Page1' },
-                        { id: '4', title: '提现黑名单', url: '#', template: '' },
-                        { id: '3', title: '公会薪资转账', url: '#', template: '' },
-                        { id: '5', title: '离线打款', url: '#', template: '' },
-                        { id: '6', title: '在线打款', url: '#', template: '' },
-                        { id: '7', title: '大款订单', url: '#', template: '' },
-                        { id: '8', title: '结算核减', url: '#', template: '' },
-                        { id: '9', title: 'payonner账户管理', url: '#', template: '' },
-                        { id: '10', title: '账号黑名单', url: '#', template: '' },
-                        { id: '11', title: '稳定币白名单', url: '#', template: '' },
-                    ],
-                },
-            ],
-        },
-    ],
+    // navGroups 默认为空数组 - 配置从云端加载
+    navGroups: [],
 
     projectGroups: [
         {
@@ -261,16 +239,40 @@ export function createProjectGroup(
 // 导航状态管理
 // ============================================
 
-// 从配置中获取默认导航
-const firstNavGroup = defaultSidebarConfig.navGroups[0]
-const firstMainNav = firstNavGroup?.items[0]
-const firstSubNav = firstMainNav?.items?.[0]
-
 // 导航状态（模块级别的单例状态）
-const currentMainNav = ref(firstMainNav?.title ?? '')
-const currentSubNav = ref(firstSubNav?.title ?? '')
-const _currentNavId = ref(firstSubNav?.id ?? '')
+const currentMainNav = ref('')
+const currentSubNav = ref('')
+const _currentNavId = ref('')
 const detailTitle = ref<string | null>(null)
+
+// 外部注入的 navGroups 引用（来自 configStore，避免循环依赖）
+const _navGroupsRef = ref<NavGroup[] | null>(null)
+
+/**
+ * 初始化导航状态（在配置加载后调用）
+ */
+export function initNavigation(navGroups: NavGroup[]) {
+    if (!navGroups || navGroups.length === 0) return
+
+    const firstNavGroup = navGroups[0]
+    const firstMainNav = firstNavGroup?.items[0]
+    const firstSubNav = firstMainNav?.items?.[0]
+
+    if (firstMainNav) {
+        currentMainNav.value = firstMainNav.title
+        if (firstSubNav) {
+            currentSubNav.value = firstSubNav.title
+            _currentNavId.value = firstSubNav.id
+        }
+    }
+}
+
+/**
+ * 设置 navGroups 引用（由 configStore 调用）
+ */
+export function setNavGroupsRef(navGroups: NavGroup[]) {
+    _navGroupsRef.value = navGroups
+}
 
 /**
  * 导航状态管理 Composable
@@ -284,8 +286,9 @@ export function useNavigation() {
         if (navId) {
             _currentNavId.value = navId
         } else {
-            // 如果没有传 navId，尝试从配置中查找
-            for (const group of defaultSidebarConfig.navGroups) {
+            // 如果没有传 navId，尝试从配置中查找（使用云端配置）
+            const navGroups = _navGroupsRef.value || []
+            for (const group of navGroups) {
                 for (const mainItem of group.items) {
                     const subItem = mainItem.items?.find(item => item.title === subNav)
                     if (subItem) {
@@ -313,13 +316,21 @@ export function useNavigation() {
     const currentNavId = computed(() => _currentNavId.value)
 
     // 计算当前页面模板 - 从配置中动态查找
+    // 注意：需要从外部注入 configStore 的 navGroups 引用以避免循环依赖
+    // 这里先从默认配置查找，configStore 会在加载后更新
     const currentTemplate = computed(() => {
-        // 遍历所有导航组查找当前子导航对应的模板
-        for (const group of defaultSidebarConfig.navGroups) {
-            for (const mainItem of group.items) {
-                const subItem = mainItem.items?.find(item => item.id === _currentNavId.value)
-                if (subItem?.template) {
-                    return subItem.template
+        // 从 _navGroupsRef 查找（由 configStore 注入的云端配置）
+        if (_navGroupsRef.value) {
+            for (const group of _navGroupsRef.value) {
+                for (const mainItem of group.items) {
+                    const subItem = mainItem.items?.find((item: NavSubItem) => item.id === _currentNavId.value)
+                    if (subItem?.template) {
+                        return subItem.template
+                    }
+                    // Phase 2: Support component field (implies Page1)
+                    if (subItem?.component) {
+                        return 'Page1'
+                    }
                 }
             }
         }

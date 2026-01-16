@@ -30,7 +30,9 @@ const configStore = useConfigStore()
 
 // --- 获取当前页面配置 ---
 const pageConfig = computed<Page1Config | undefined>(() => {
-  return configStore.getPage1Config(currentNavId.value)
+  const config = configStore.getPage1Config(currentNavId.value)
+  console.log('Page1: Resolving config for ID:', currentNavId.value, 'Found:', !!config)
+  return config
 })
 
 // --- 响应式数据 ---
@@ -41,7 +43,7 @@ const selectedRows = ref<number[]>([])
 
 // 分页
 const currentPage = ref(1)
-const pageSize = 15
+const pageSize = computed(() => pageConfig.value?.tableArea.pageSize || 15)
 
 // 顶部栏状态
 const currentApp = ref(pageConfig.value?.topBar?.appOptions?.[0] ?? '')
@@ -50,12 +52,75 @@ const currentLang = ref(pageConfig.value?.topBar?.langOptions?.[0] ?? '')
 // 从配置自动生成筛选状态
 const filters = reactive<Record<string, any>>({})
 
+// 根据 mockFormat 生成虚拟数据
+function generateMockValue(format: string | undefined, label: string, index: number): string | number {
+  switch (format) {
+    case 'text':
+      // 文本格式：标签名 + 数字
+      return `${label}${index + 1}`
+    case 'datetime':
+      // 时间格式：随机日期时间
+      const now = new Date()
+      const randomDays = Math.floor(Math.random() * 30)
+      const randomHours = Math.floor(Math.random() * 24)
+      const randomMinutes = Math.floor(Math.random() * 60)
+      const randomSeconds = Math.floor(Math.random() * 60)
+      const date = new Date(now.getTime() - randomDays * 24 * 60 * 60 * 1000)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      const h = String(randomHours).padStart(2, '0')
+      const m = String(randomMinutes).padStart(2, '0')
+      const s = String(randomSeconds).padStart(2, '0')
+      return `${year}-${month}-${day} ${h}:${m}:${s}`
+    case 'number':
+      // 数字格式：随机5位数
+      return Math.floor(10000 + Math.random() * 90000)
+    default:
+      // 默认返回空或占位值
+      return `${label}${index + 1}`
+  }
+}
+
+// 根据配置生成模拟数据
+function generateMockData(): any[] {
+  if (!pageConfig.value) return []
+  
+  const columns = pageConfig.value.tableArea.columns
+  const rowCount = 20 // 生成20行数据
+  const data: any[] = []
+  
+  for (let i = 0; i < rowCount; i++) {
+    const row: Record<string, any> = { id: i + 1 }
+    
+    columns.forEach(col => {
+      if (col.mockFormat) {
+        row[col.key] = generateMockValue(col.mockFormat, col.label, i)
+      } else {
+        // 如果没有指定格式，使用默认值
+        row[col.key] = `${col.label}${i + 1}`
+      }
+    })
+    
+    data.push(row)
+  }
+  
+  return data
+}
+
 // 加载数据函数
 function loadData() {
   if (pageConfig.value?.mockData) {
-    tableData.value = pageConfig.value.mockData()
+    const mockData = pageConfig.value.mockData()
+    // 如果 mockData 返回空数组，尝试根据列配置生成数据
+    if (mockData.length === 0) {
+      tableData.value = generateMockData()
+    } else {
+      tableData.value = mockData
+    }
   } else {
-    tableData.value = []
+    // 没有 mockData 函数，根据列配置生成
+    tableData.value = generateMockData()
   }
   currentPage.value = 1
   selectedRows.value = []
@@ -84,10 +149,10 @@ const filteredData = computed(() => {
 })
 
 const paginatedData = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredData.value.slice(start, start + pageSize)
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredData.value.slice(start, start + pageSize.value)
 })
-const totalPages = computed(() => Math.ceil(filteredData.value.length / pageSize) || 1)
+const totalPages = computed(() => Math.ceil(filteredData.value.length / pageSize.value) || 1)
 
 // 可见的筛选项
 const visibleFilters = computed(() => {
@@ -145,32 +210,35 @@ const getStatusClass = (status: string) => {
   <div v-if="pageConfig" class="h-full flex flex-col">
     <!-- 顶部操作栏 Teleport -->
     <Teleport to="#breadcrumb-actions" defer>
-      <div v-if="pageConfig.topBar" class="flex items-center gap-4">
-        <!-- App 选择 -->
-        <Select v-if="pageConfig.topBar.appOptions" v-model="currentApp">
-          <SelectTrigger class="w-[120px] h-8 text-xs">
-            <SelectValue placeholder="选择应用" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="app in pageConfig.topBar.appOptions" :key="app" :value="app">
-              {{ app }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+      <div class="flex items-center gap-4">
+        <!-- topBar 选择器（如果配置了的话） -->
+        <template v-if="pageConfig.topBar">
+          <!-- App 选择 -->
+          <Select v-if="pageConfig.topBar.appOptions" v-model="currentApp">
+            <SelectTrigger class="w-[120px] h-8 text-xs">
+              <SelectValue placeholder="选择应用" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="app in pageConfig.topBar.appOptions" :key="app" :value="app">
+                {{ app }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
-        <!-- 语言选择 -->
-        <Select v-if="pageConfig.topBar.langOptions" v-model="currentLang">
-          <SelectTrigger class="w-[100px] h-8 text-xs">
-            <SelectValue placeholder="选择语言" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="lang in pageConfig.topBar.langOptions" :key="lang" :value="lang">
-              {{ lang }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+          <!-- 语言选择 -->
+          <Select v-if="pageConfig.topBar.langOptions" v-model="currentLang">
+            <SelectTrigger class="w-[100px] h-8 text-xs">
+              <SelectValue placeholder="选择语言" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="lang in pageConfig.topBar.langOptions" :key="lang" :value="lang">
+                {{ lang }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </template>
 
-        <!-- 功能按钮 -->
+        <!-- 功能按钮 (始终显示的全局按钮) -->
         <div class="flex items-center gap-2">
            <Button variant="ghost" size="sm" class="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 font-normal">
              更新记录
@@ -234,10 +302,8 @@ const getStatusClass = (status: string) => {
           </div>
 
           <!-- 底部操作按钮 -->
-          <div v-if="pageConfig.actionsArea?.show !== false" class="flex items-center justify-between pt-2 border-t">
-            <div class="text-xs text-muted-foreground">
-              已选择 <span class="font-semibold text-foreground">{{ selectedRows.length }}</span> 条记录
-            </div>
+          <div v-if="pageConfig.actionsArea?.show !== false" class="flex items-center justify-end pt-2 border-t">
+
             
             <div class="flex items-center gap-3">
               <template v-for="(action, index) in visibleActions" :key="action.key">
@@ -367,6 +433,31 @@ const getStatusClass = (status: string) => {
                   >
                     {{ item[col.key] }}
                   </Badge>
+                  <!-- 文字按钮类型 -->
+                  <div v-else-if="col.type === 'text-button'" class="flex items-center gap-2">
+                    <template v-if="col.buttons && col.buttons.length > 0">
+                      <template v-for="(btn, idx) in col.buttons" :key="idx">
+                        <div v-if="idx > 0" class="w-px h-3 bg-border"></div>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          class="h-auto p-0 text-blue-600 hover:text-blue-700"
+                          @click.stop="console.log('Clicked:', btn, item)"
+                        >
+                          {{ btn }}
+                        </Button>
+                      </template>
+                    </template>
+                    <Button
+                      v-else
+                      variant="link"
+                      size="sm"
+                      class="h-auto p-0 text-blue-600 hover:text-blue-700"
+                      @click.stop="console.log('Clicked:', item[col.key])"
+                    >
+                      {{ item[col.key] }}
+                    </Button>
+                  </div>
                   <!-- 普通文本类型 -->
                   <span v-else class="text-sm">{{ item[col.key] }}</span>
                 </TableCell>
@@ -409,7 +500,9 @@ const getStatusClass = (status: string) => {
   </div>
 
   <!-- 无配置时显示占位 -->
-  <div v-else class="h-full flex items-center justify-center text-muted-foreground">
-    <p>页面配置未找到 (navId: {{ currentNavId }})</p>
+  <div v-else class="flex flex-col items-center justify-center h-full text-muted-foreground">
+      <p class="text-lg font-medium">配置未找到</p>
+      <p class="text-sm">Config ID: {{ currentNavId }}</p>
+      <p class="text-xs text-muted-foreground mt-2">请检查配置导入日志</p>
   </div>
 </template>

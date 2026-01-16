@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
-import { Layers, Plus, Pencil, Trash2, Settings2, Save, FileCode, GripVertical, Info, ChevronRight, ChevronDown, Eye, EyeOff, Square, Download, Upload, FileDown } from 'lucide-vue-next'
-import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+// Card components removed - using plain divs with border/bg-card
+import { Layers, Plus, Pencil, Trash2, Settings2, Save, FileCode, GripVertical, Info, ChevronRight, ChevronDown, Eye, EyeOff, Square, Download, Upload, FileDown, Search, MoreHorizontal, RefreshCw } from 'lucide-vue-next'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -29,6 +31,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { toast } from 'vue-sonner'
 import draggable from 'vuedraggable'
 import { useConfigStore, type NavSubItem, type FilterConfig, type TableColumn } from '@/stores/configStore'
@@ -38,6 +46,7 @@ const configStore = useConfigStore()
 
 // UI State - 当前选中的导航项
 const selectedNavId = ref<string | null>(null)
+const searchQuery = ref('') // 侧边栏搜索
 
 // 一级导航展开/折叠状态
 const expandedMainItems = reactive<Record<string, boolean>>({})
@@ -58,6 +67,31 @@ const toggleMainItemExpand = (mainItemId: string) => {
   expandedMainItems[mainItemId] = !expandedMainItems[mainItemId]
 }
 
+// 过滤后的导航组 (Search Enhancement)
+const filteredNavGroups = computed(() => {
+  if (!searchQuery.value) return configStore.navGroups
+
+  const query = searchQuery.value.toLowerCase()
+  return configStore.navGroups.map(group => {
+    const filteredItems = group.items.map(mainItem => {
+      // 如果主导航匹配，显示所有子导航
+      if (mainItem.title.toLowerCase().includes(query)) return mainItem
+
+      // 否则过滤子导航
+      const filteredSubItems = mainItem.items?.filter(sub => 
+        sub.title.toLowerCase().includes(query)
+      )
+
+      if (filteredSubItems?.length) {
+        return { ...mainItem, items: filteredSubItems, isOpen: true } // 搜索时自动展开
+      }
+      return null
+    }).filter(Boolean) as typeof group.items
+
+    return { ...group, items: filteredItems }
+  }).filter(group => group.items.length > 0)
+})
+
 // Dialog State
 const editNavDialogOpen = ref(false)
 const filterDialogOpen = ref(false)
@@ -74,7 +108,7 @@ const pendingConfirmAction = ref<(() => void) | null>(null)
 // Form State
 const navForm = ref({
   title: '',
-  template: 'none' as 'Page1' | 'Page2' | 'none'
+  // template field removed - utilizing component structure
 })
 
 const filterForm = ref({
@@ -90,7 +124,9 @@ const columnForm = ref({
   key: '',
   label: '',
   width: '100px',
-  type: 'text' as 'text' | 'badge' | 'status-badge',
+  type: 'text' as 'text' | 'badge' | 'status-badge' | 'text-button',
+  mockFormat: 'none' as 'none' | 'text' | 'datetime' | 'number',
+  buttons: '', // 按钮列表，逗号分隔
 })
 
 // Action Button Dialog State
@@ -158,8 +194,7 @@ const handleSelectNav = (navId: string) => {
 const openEditNavDialog = () => {
   if (selectedNavInfo.value) {
     navForm.value = {
-      title: selectedNavInfo.value.subItem.title,
-      template: selectedNavInfo.value.subItem.template || 'none'
+      title: selectedNavInfo.value.subItem.title
     }
     editNavDialogOpen.value = true
   }
@@ -176,9 +211,7 @@ const handleEditNav = () => {
       selectedNavInfo.value.mainItemId,
       selectedNavId.value!,
       {
-        title: navForm.value.title,
-        // Issue 1: 使用空字符串而不是 undefined，保持与 sidebar.ts 一致
-        template: navForm.value.template === 'none' ? '' : navForm.value.template
+        title: navForm.value.title
       }
     )
     closeEditNavDialog()
@@ -225,10 +258,7 @@ const handleAddSubNav = () => {
 const addMainNavDialogOpen = ref(false)
 const addMainNavForm = ref({ title: '', icon: Square })
 
-const openAddMainNavDialog = () => {
-  addMainNavForm.value = { title: '', icon: Square }
-  addMainNavDialogOpen.value = true
-}
+
 
 const closeAddMainNavDialog = () => {
   addMainNavDialogOpen.value = false
@@ -437,23 +467,8 @@ const toggleActionVisibility = (index: number) => {
 
 const openAddColumnDialog = () => {
   editingColumnIndex.value = null
-  columnForm.value = { key: '', label: '', width: '100px', type: 'text' }
+  columnForm.value = { key: '', label: '', width: '100px', type: 'text', mockFormat: 'none', buttons: '' }
   columnDialogOpen.value = true
-}
-
-const openEditColumnDialog = (index: number) => {
-  const config = configStore.page1Configs[selectedNavId.value!]
-  if (config) {
-    const col = config.tableArea.columns[index]
-    editingColumnIndex.value = index
-    columnForm.value = {
-      key: col.key,
-      label: col.label,
-      width: col.width || '100px',
-      type: col.type || 'text'
-    }
-    columnDialogOpen.value = true
-  }
 }
 
 const closeColumnDialog = () => {
@@ -469,7 +484,11 @@ const handleSaveColumn = () => {
         key: columnForm.value.key,
         label: columnForm.value.label,
         width: columnForm.value.width || undefined,
-        type: columnForm.value.type === 'text' ? undefined : columnForm.value.type
+        type: columnForm.value.type === 'text' ? undefined : columnForm.value.type,
+        mockFormat: columnForm.value.mockFormat === 'none' ? undefined : columnForm.value.mockFormat,
+        buttons: columnForm.value.type === 'text-button' && columnForm.value.buttons 
+          ? columnForm.value.buttons.split(/[，,]/).map(s => s.trim()).filter(s => s) 
+          : undefined
       }
       
       if (editingColumnIndex.value !== null) {
@@ -521,20 +540,7 @@ const openAddActionDialog = () => {
   actionDialogOpen.value = true
 }
 
-const openEditActionDialog = (index: number) => {
-  const config = configStore.page1Configs[selectedNavId.value!]
-  if (config?.actionsArea?.buttons) {
-    const action = config.actionsArea.buttons[index]
-    editingActionIndex.value = index
-    actionForm.value = {
-      key: action.key,
-      label: action.label,
-      variant: action.variant || 'default',
-      className: action.className || ''
-    }
-    actionDialogOpen.value = true
-  }
-}
+
 
 const closeActionDialog = () => {
   actionDialogOpen.value = false
@@ -589,19 +595,7 @@ const openAddCardDialog = () => {
   cardDialogOpen.value = true
 }
 
-const openEditCardDialog = (index: number) => {
-  const config = configStore.page1Configs[selectedNavId.value!]
-  if (config?.cardArea?.cards) {
-    const card = config.cardArea.cards[index]
-    editingCardIndex.value = index
-    cardForm.value = {
-      key: card.key,
-      title: card.title,
-      data: String(card.data)
-    }
-    cardDialogOpen.value = true
-  }
-}
+
 
 const closeCardDialog = () => {
   cardDialogOpen.value = false
@@ -739,29 +733,6 @@ const cardList = computed({
 // ============================================
 
 const isSaving = ref(false)
-const handleSaveToSource = async () => {
-  showConfirm(
-    '确定写入源码？',
-    '这将更新 src/config/page1.ts 和 src/config/sidebar.ts 文件。\nVite 会自动热更新。',
-    async () => {
-      isSaving.value = true
-      try {
-        const success = await configStore.saveToSourceFile()
-        if (success) {
-          toast.success('保存成功', {
-            description: 'page1.ts 已更新，Vite 正在热更新...'
-          })
-        } else {
-          toast.error('保存失败', {
-            description: '请确认插件已配置且运行在开发环境。'
-          })
-        }
-      } finally {
-        isSaving.value = false
-      }
-    }
-  )
-}
 
 // ============================================
 // 配置导入/导出功能
@@ -808,6 +779,10 @@ const handleImportConfig = () => {
   fileInputRef.value?.click()
 }
 
+// 待确认导入的数据
+const pendingImportData = ref<any>(null)
+const importConfirmDialogOpen = ref(false)
+
 // 处理文件选择
 const handleFileSelected = (event: Event) => {
   const input = event.target as HTMLInputElement
@@ -818,16 +793,22 @@ const handleFileSelected = (event: Event) => {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target?.result as string)
-      const result = configStore.importFullConfig(data)
-      if (result.success) {
-        toast.success('导入成功', {
-          description: result.message
-        })
-      } else {
+      // 验证新版 JSON 结构 (version 2.0)
+      if (!data.version || !data.navGroups || !Array.isArray(data.navGroups)) {
         toast.error('导入失败', {
-          description: result.message
+          description: '无效的配置文件格式，请使用 2.0 版本格式'
+        })
+        return
+      }
+      // 检查版本
+      if (data.version !== '2.0') {
+        toast.warning('版本警告', {
+          description: `配置文件版本 ${data.version} 可能不兼容，推荐使用 2.0 版本`
         })
       }
+      // 储存数据并显示确认对话框
+      pendingImportData.value = data
+      importConfirmDialogOpen.value = true
     } catch (err) {
       toast.error('导入失败', {
         description: '无效的 JSON 文件格式'
@@ -839,47 +820,53 @@ const handleFileSelected = (event: Event) => {
   // 清空 input 以便重复选择同一文件
   input.value = ''
 }
+
+// 确认导入并同步到云端
+const handleConfirmImport = async () => {
+  if (!pendingImportData.value) return
+  
+  isSaving.value = true
+  importConfirmDialogOpen.value = false
+  
+  try {
+    const result = await configStore.importAndSyncToCloud(pendingImportData.value)
+    if (result.success) {
+      toast.success('导入成功', {
+        description: result.message
+      })
+    } else {
+      toast.error('导入失败', {
+        description: result.message
+      })
+    }
+  } finally {
+    isSaving.value = false
+    pendingImportData.value = null
+  }
+}
+
+// 保存配置到云端
+const handleSaveToCloud = async () => {
+  isSaving.value = true
+  try {
+    const result = await configStore.saveToSupabase()
+    if (result.success) {
+      toast.success('保存成功', {
+        description: result.message
+      })
+    } else {
+      toast.error('保存失败', {
+        description: result.message
+      })
+    }
+  } finally {
+    isSaving.value = false
+  }
+}
 </script>
 
 <template>
   <div class="settings-root">
-    <!-- Teleport 到面包屑操作区 -->
-    <Teleport to="#breadcrumb-actions" defer>
-      <div class="flex items-center gap-2">
-        <!-- 导入/导出按钮 -->
-        <Button variant="ghost" size="sm" @click="handleDownloadTemplate">
-          <FileDown class="w-4 h-4 mr-1" />
-          模板下载
-        </Button>
-        <Button variant="ghost" size="sm" @click="handleImportConfig">
-          <Upload class="w-4 h-4 mr-1" />
-          导入
-        </Button>
-        <Button variant="ghost" size="sm" @click="handleExportConfig">
-          <Download class="w-4 h-4 mr-1" />
-          导出
-        </Button>
-        
-        <div class="w-px h-4 bg-border mx-1"></div>
-        
-        <Button 
-          v-if="currentPageConfig"
-          variant="ghost" 
-          size="sm" 
-          class="text-destructive hover:text-destructive hover:bg-destructive/10"
-          @click="handleDeletePageConfig"
-          :disabled="isSaving"
-        >
-          <Trash2 class="w-4 h-4 mr-2" />
-          重置页面
-        </Button>
-        <Button variant="ghost" size="sm" @click="handleSaveToSource" :disabled="isSaving">
-          <Save class="w-4 h-4 mr-2" />
-          <span v-if="isSaving">保存中...</span>
-          <span v-else>写入源码</span>
-        </Button>
-      </div>
-      
       <!-- 隐藏的文件输入 -->
       <input 
         ref="fileInputRef"
@@ -888,32 +875,28 @@ const handleFileSelected = (event: Event) => {
         class="hidden"
         @change="handleFileSelected"
       />
-    </Teleport>
     
     <div class="h-full flex overflow-hidden">
       <!-- Left Sidebar: Navigation List -->
     <div class="w-72 border-r bg-muted/30 flex flex-col">
-      <div class="p-4 border-b flex items-center justify-between">
-        <h3 class="font-semibold flex items-center gap-2">
-          <Layers class="w-4 h-4" />
-          导航列表
-        </h3>
-        <Button variant="ghost" size="sm" class="h-6 w-6 p-0" @click="openAddMainNavDialog">
-           <Plus class="w-4 h-4" />
-        </Button>
+      <!-- Sidebar Header -->
+      <div class="p-3 border-b">
+        <h2 class="font-semibold text-base flex items-center gap-2">
+          <Settings2 class="w-4 h-4" />
+          页面配置
+        </h2>
       </div>
-      <div class="flex-1 overflow-auto">
-        <div class="p-2 space-y-4">
-          <!-- Iterate Groups -->
-          <div v-for="(group, groupIndex) in configStore.navGroups" :key="groupIndex">
-             <!-- Group Label (Optional, usually Platform) -->
-             <div v-if="group.label && group.showLabel" class="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {{ group.label }}
-             </div>
 
-             <div class="space-y-2">
-                <!-- Iterate Main Items -->
-                <div v-for="mainItem in group.items" :key="mainItem.id" class="border rounded-lg overflow-hidden">
+      <!-- Navigation List -->
+      <div class="flex-1 overflow-y-auto p-3 scrollbar-thin">
+        <div class="space-y-6">
+          <div v-for="(group, groupIndex) in filteredNavGroups" :key="groupIndex">
+            <h3 class="text-xs font-semibold text-muted-foreground mb-3 px-2 uppercase tracking-wider">
+              {{ group.label || '未命名分组' }}
+            </h3>
+            
+            <div class="space-y-1">
+              <div v-for="mainItem in group.items" :key="mainItem.id" class="border rounded-lg overflow-hidden">
                   <!-- Main Item Header - Clickable to expand/collapse -->
                   <div 
                     class="px-3 py-2 text-sm font-medium text-foreground flex items-center gap-2 bg-muted/50 cursor-pointer hover:bg-muted transition-colors"
@@ -954,21 +937,13 @@ const handleFileSelected = (event: Event) => {
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                           @click="handleSelectNav(subItem.id)"
                          >
-                           <div class="flex-1 min-w-0 flex items-center gap-2">
+                           <div class="flex items-center gap-2 flex-1 min-w-0">
                               <!-- Drag Handle (visible on hover) -->
                               <GripVertical class="w-3 h-3 text-muted-foreground opacity-0 group-hover/item:opacity-50 cursor-grab drag-handle" />
                               <span class="truncate text-sm">{{ subItem.title }}</span>
                            </div>
                            
-                           <div class="flex items-center gap-1 shrink-0">
-                             <Badge 
-                               v-if="subItem.template"
-                               variant="secondary"
-                               class="text-[10px] h-5 px-1.5 bg-background/50 group-hover/item:bg-background"
-                             >
-                               {{ subItem.template }}
-                             </Badge>
-                           </div>
+                           <!-- Removed template badge -->
                          </div>
                       </template>
                     </draggable>
@@ -979,6 +954,11 @@ const handleFileSelected = (event: Event) => {
                   </div>
                 </div>
              </div>
+          </div>
+          
+          <!-- Empty Search Result -->
+          <div v-if="filteredNavGroups.length === 0" class="text-center py-8 text-muted-foreground">
+            <p class="text-sm">未找到匹配的导航项</p>
           </div>
         </div>
       </div>
@@ -996,478 +976,670 @@ const handleFileSelected = (event: Event) => {
 
       <!-- 选中导航后 -->
       <div v-else class="flex flex-col h-full">
-          <!-- 头部 -->
-          <div class="p-4 border-b flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <FileCode class="w-5 h-5 text-muted-foreground" />
-              <div>
-                <h3 class="font-semibold">{{ selectedNavInfo?.subItem.title }}</h3>
-                <span class="text-xs text-muted-foreground">导航 ID: {{ selectedNavId }}</span>
-              </div>
+          <!-- Header Content (Compact Breadcrumb Layout) -->
+          <div class="px-4 py-2.5 border-b flex items-center justify-between shrink-0 bg-background/95 backdrop-blur z-10">
+            <!-- Left: Breadcrumb Style Title -->
+            <div class="flex items-center gap-2 overflow-hidden">
+               <FileCode class="w-4 h-4 text-primary shrink-0" />
+               <span class="text-sm font-medium truncate">{{ selectedNavInfo?.subItem.title }}</span>
+               <span class="text-[10px] text-muted-foreground font-mono px-1.5 py-0.5 bg-muted rounded">{{ selectedNavId }}</span>
             </div>
-            <div class="flex items-center gap-2">
-              <Button variant="outline" size="sm" @click="openEditNavDialog">
-                <Pencil class="w-4 h-4 mr-1" />
-                编辑导航
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                class="text-destructive hover:text-destructive hover:bg-destructive/10"
-                @click="handleDeleteCurrentNav"
-              >
-                <Trash2 class="w-4 h-4 mr-1" />
-                删除导航
-              </Button>
+
+             <!-- Right: All Actions in Breadcrumb -->
+            <div class="flex items-center gap-1 shrink-0">
+               <!-- 下载模板 -->
+               <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" title="下载模板" @click="handleDownloadTemplate">
+                  <FileDown class="w-3.5 h-3.5" />
+               </Button>
+               <!-- 导入配置 -->
+               <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" title="导入配置" @click="handleImportConfig">
+                  <Upload class="w-3.5 h-3.5" />
+               </Button>
+               <!-- 导出配置 -->
+               <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" title="导出配置" @click="handleExportConfig">
+                  <Download class="w-3.5 h-3.5" />
+               </Button>
+
+               <!-- 分隔线 -->
+               <div class="w-px h-4 bg-border mx-0.5"></div>
+               
+               <!-- 重命名 -->
+               <Button variant="ghost" size="sm" class="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" title="重命名" @click="openEditNavDialog">
+                  <Pencil class="w-3.5 h-3.5" />
+               </Button>
+
+               <!-- 更多操作 (危险操作) -->
+               <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                  <Button variant="ghost" size="sm" class="h-7 px-2 text-muted-foreground hover:text-foreground">
+                    <MoreHorizontal class="w-3.5 h-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-40">
+                  <DropdownMenuItem class="text-destructive focus:text-destructive text-xs" @click="handleDeleteCurrentNav">
+                    <Trash2 class="w-3.5 h-3.5 mr-2" />删除导航项
+                  </DropdownMenuItem>
+                  <DropdownMenuItem class="text-destructive focus:text-destructive text-xs" @click="handleDeletePageConfig">
+                    <RefreshCw class="w-3.5 h-3.5 mr-2" />重置页面
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+               <!-- 分隔线 -->
+               <div class="w-px h-4 bg-border mx-0.5"></div>
+               
+               <!-- 保存按钮 -->
+               <Button size="sm" class="h-7 px-3 text-xs" @click="handleSaveToCloud" :disabled="isSaving">
+                  <Save class="w-3.5 h-3.5 mr-1" />
+                  <span v-if="isSaving">保存中...</span>
+                  <span v-else>保存</span>
+                </Button>
             </div>
           </div>
 
-          <!-- 内容区 -->
-          <div class="flex-1 overflow-auto p-6 space-y-6">
+          <!-- 内容区 (Compact) -->
+          <div class="flex-1 overflow-auto p-4 space-y-4">
             <!-- 无配置时 -->
-            <div v-if="!currentPageConfig" class="text-center py-12 border-2 border-dashed rounded-lg">
-              <FileCode class="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-              <p class="text-muted-foreground mb-4">该导航项还没有页面配置</p>
-              <Button @click="handleCreatePageConfig">
-                <Plus class="w-4 h-4 mr-1" />
+            <div v-if="!currentPageConfig" class="text-center py-8 border-2 border-dashed rounded-lg">
+              <FileCode class="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+              <p class="text-muted-foreground text-sm mb-3">该导航项还没有页面配置</p>
+              <Button size="sm" @click="handleCreatePageConfig">
+                <Plus class="w-3.5 h-3.5 mr-1" />
                 创建 Page1 配置
               </Button>
             </div>
 
             <!-- 有配置时 -->
             <template v-else>
-              <!-- 筛选区配置 -->
-              <div class="border rounded-lg">
-                <div class="p-4 border-b flex items-center justify-between bg-muted/30">
-                  <h4 class="font-semibold">筛选区配置</h4>
-                  <Button variant="outline" size="sm" @click="openAddFilterDialog">
-                    <Plus class="w-4 h-4 mr-1" />
-                    添加筛选项
-                  </Button>
-                </div>
-                <div class="p-4 space-y-4">
-                  <!-- 布局配置 -->
-                  <div class="flex items-center gap-6">
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm text-muted-foreground">列数:</label>
-                      <Input 
-                        :model-value="currentPageConfig.filterArea.columns"
-                        @update:model-value="handleUpdateFilterArea('columns', Number($event))"
-                        type="number"
-                        class="w-20 h-8"
-                      />
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm text-muted-foreground">间距:</label>
-                      <Input 
-                        :model-value="currentPageConfig.filterArea.gap"
-                        @update:model-value="handleUpdateFilterArea('gap', $event)"
-                        class="w-24 h-8"
-                        placeholder="如 16px"
-                      />
-                    </div>
-                  </div>
-                  <!-- 筛选项列表 - Table (Issue 9: 支持拖拽排序) -->
-                  <div class="border rounded-md" v-if="currentPageConfig.filterArea.filters.length > 0">
-                    <table class="w-full">
-                      <thead>
-                        <tr class="border-b bg-muted/50">
-                          <th class="w-8 p-2"></th>
-                          <th class="text-left p-2 text-sm font-medium">类型</th>
-                          <th class="text-left p-2 text-sm font-medium">标签</th>
-                          <th class="text-left p-2 text-sm font-medium">字段名</th>
-                          <th class="text-left p-2 text-sm font-medium">选项</th>
-                          <th class="text-right p-2 text-sm font-medium w-20">操作</th>
-                        </tr>
-                      </thead>
-                      <draggable 
-                        v-model="filterList"
-                        tag="tbody"
-                        item-key="key"
-                        handle=".drag-handle"
-                        :animation="200"
-                      >
-                        <template #item="{ element: filter, index }">
-                          <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                            <td class="p-2">
-                              <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
-                            </td>
-                            <td class="p-2">
-                              <Badge variant="outline" class="text-xs">{{ filter.type }}</Badge>
-                            </td>
-                            <td class="p-2 text-sm">{{ filter.label }}</td>
-                            <td class="p-2">
-                              <code class="text-xs text-muted-foreground">{{ filter.key }}</code>
-                            </td>
-                            <td class="p-2 text-xs text-muted-foreground">
-                              <span v-if="filter.options">
-                                {{ filter.options.length }} 个选项
-                              </span>
-                              <span v-else>-</span>
-                            </td>
-                            <td class="p-2">
-                              <div class="flex gap-1 justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  :class="filter.visible === false ? 'text-muted-foreground' : 'text-foreground'"
-                                  @click="toggleFilterVisibility(index)"
-                                  :title="filter.visible === false ? '点击显示' : '点击隐藏'"
-                                >
-                                  <EyeOff v-if="filter.visible === false" class="w-3 h-3" />
-                                  <Eye v-else class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  @click="openEditFilterDialog(index)"
-                                >
-                                  <Pencil class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                  @click="handleDeleteFilter(index)"
-                                >
-                                  <Trash2 class="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        </template>
-                      </draggable>
-                    </table>
-                  </div>
-                  <div v-if="currentPageConfig.filterArea.filters.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
-                    暂无筛选项
-                  </div>
-                </div>
-              </div>
+            <Tabs default-value="filter" class="w-full">
+                <TabsList class="grid w-full grid-cols-4 h-9">
+                  <TabsTrigger value="filter" class="text-xs">筛选区</TabsTrigger>
+                  <TabsTrigger value="actions" class="text-xs">操作区</TabsTrigger>
+                  <TabsTrigger value="card" class="text-xs">卡片区</TabsTrigger>
+                  <TabsTrigger value="table" class="text-xs">表格区</TabsTrigger>
+                </TabsList>
 
-              <!-- 操作区配置 -->
-              <div class="border rounded-lg">
-                <div class="p-4 border-b flex items-center justify-between bg-muted/30">
-                  <div class="flex items-center gap-3">
-                    <h4 class="font-semibold">操作区配置</h4>
-                    <div class="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        :checked="currentPageConfig.actionsArea?.show !== false"
-                        @change="toggleAreaShow('actionsArea')"
-                        class="rounded"
-                      />
-                      <label class="text-xs text-muted-foreground">显示</label>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" @click="openAddActionDialog">
-                    <Plus class="w-4 h-4 mr-1" />
-                    添加按钮
-                  </Button>
-                </div>
-                <div class="p-4 space-y-4">
-                  <!-- Action List -->
-                  <div class="border rounded-md" v-if="currentPageConfig.actionsArea?.buttons && currentPageConfig.actionsArea.buttons.length > 0">
-                    <table class="w-full">
-                      <thead>
-                        <tr class="border-b bg-muted/50">
-                          <th class="w-8 p-2"></th>
-                          <th class="text-left p-2 text-sm font-medium">标签</th>
-                          <th class="text-left p-2 text-sm font-medium">Key</th>
-                          <th class="text-left p-2 text-sm font-medium">样式</th>
-                          <th class="text-right p-2 text-sm font-medium w-20">操作</th>
-                        </tr>
-                      </thead>
-                      <draggable 
-                        v-model="actionList"
-                        tag="tbody"
-                        item-key="key"
-                        handle=".drag-handle"
-                        :animation="200"
-                      >
-                        <template #item="{ element: action, index }">
-                          <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                            <td class="p-2">
-                              <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
-                            </td>
-                            <td class="p-2 text-sm font-medium">{{ action.label }}</td>
-                            <td class="p-2">
-                              <code class="text-xs text-muted-foreground">{{ action.key }}</code>
-                            </td>
-                            <td class="p-2">
-                              <Badge variant="outline" class="text-xs">{{ action.variant || 'default' }}</Badge>
-                            </td>
-                            <td class="p-2">
-                              <div class="flex gap-1 justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  :class="action.visible === false ? 'text-muted-foreground' : 'text-foreground'"
-                                  @click="toggleActionVisibility(index)"
-                                  :title="action.visible === false ? '点击显示' : '点击隐藏'"
-                                >
-                                  <EyeOff v-if="action.visible === false" class="w-3 h-3" />
-                                  <Eye v-else class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  @click="openEditActionDialog(index)"
-                                >
-                                  <Pencil class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                  @click="handleDeleteAction(index)"
-                                >
-                                  <Trash2 class="w-3 h-3" />
-                                </Button>
+                <div class="mt-3">
+                  <!-- 筛选区配置 -->
+                  <TabsContent value="filter" class="m-0 focus-visible:ring-0">
+                    <div class="rounded-lg border bg-card">
+                      <div class="p-3">
+                        <!-- 布局配置与添加按钮 -->
+                        <div class="flex items-center justify-between gap-4 p-2.5 bg-muted/40 rounded-md text-xs">
+                          <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-2">
+                              <label class="text-xs text-muted-foreground">每行:</label>
+                              <div class="flex items-center">
+                                <Input 
+                                  :model-value="currentPageConfig.filterArea.columns"
+                                  @update:model-value="handleUpdateFilterArea('columns', Number($event))"
+                                  type="number"
+                                  class="w-12 h-6 text-xs rounded-r-none border-r-0 focus-visible:ring-0"
+                                />
+                                <div class="h-6 px-1.5 flex items-center bg-muted border rounded-r-md text-[10px] text-muted-foreground">列</div>
                               </div>
-                            </td>
-                          </tr>
-                        </template>
-                      </draggable>
-                    </table>
-                  </div>
-                  <div v-if="!currentPageConfig.actionsArea?.buttons || currentPageConfig.actionsArea.buttons.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
-                    暂无操作按钮
-                  </div>
-                </div>
-              </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <label class="text-xs text-muted-foreground">间距:</label>
+                              <Input 
+                                :model-value="currentPageConfig.filterArea.gap"
+                                @update:model-value="handleUpdateFilterArea('gap', $event)"
+                                class="w-16 h-6 text-xs"
+                                placeholder="16px"
+                              />
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm" class="h-6 text-[10px] px-2" @click="openAddFilterDialog">
+                            <Plus class="w-3 h-3 mr-1" />
+                            添加筛选项
+                          </Button>
+                        </div>
+                      </div>
+                        <!-- 筛选项列表 -->
+                        <div class="px-3 pb-3">
+                        <div class="border rounded-md" v-if="currentPageConfig.filterArea.filters.length > 0">
+                        <table class="w-full border-collapse">
+                          <thead>
+                            <tr class="border-b bg-muted/50">
+                              <th class="w-8 p-2 border-r border-border/50"></th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">类型</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">标签</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">字段名</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">选项/配置</th>
+                              <th class="text-right p-2 text-xs font-medium w-20">操作</th>
+                            </tr>
+                          </thead>
+                          <draggable 
+                            v-model="filterList"
+                            tag="tbody"
+                            item-key="key"
+                            handle=".drag-handle"
+                            :animation="200"
+                          >
+                            <template #item="{ element: filter, index }">
+                              <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                <td class="p-1.5 border-r border-border/50">
+                                  <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                                </td>
+                                <!-- 类型 - 下拉框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Select 
+                                    :model-value="filter.type" 
+                                    @update:model-value="(v) => filter.type = String(v) as 'input' | 'select' | 'date-range' | 'tree-select'"
+                                  >
+                                    <SelectTrigger class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus:bg-background focus:border-input focus:shadow-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="input">输入框</SelectItem>
+                                      <SelectItem value="select">下拉框</SelectItem>
+                                      <SelectItem value="date-range">日期范围</SelectItem>
+                                      <SelectItem value="tree-select">树形选择</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <!-- 标签 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="filter.label" 
+                                    class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="标签"
+                                  />
+                                </td>
+                                <!-- 字段名 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="filter.key" 
+                                    class="h-7 text-xs font-mono w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="key"
+                                  />
+                                </td>
+                                <!-- 选项/配置信息 -->
+                                <td class="p-1 text-xs text-muted-foreground border-r border-border/50">
+                                  <div v-if="filter.type === 'select'" class="truncate max-w-[100px] px-2" title="点击编辑按钮配置选项">
+                                    {{ filter.options?.length || 0 }} 个选项
+                                  </div>
+                                  <div v-else-if="filter.type === 'tree-select'" class="truncate max-w-[100px] px-2">
+                                    树形数据
+                                  </div>
+                                  <div v-else class="px-2">-</div>
+                                </td>
+                                <!-- 操作按钮 -->
+                                <td class="p-1">
+                                  <div class="flex gap-0.5 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0"
+                                      :class="filter.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                      @click="toggleFilterVisibility(index)"
+                                      :title="filter.visible === false ? '点击显示' : '点击隐藏'"
+                                    >
+                                      <EyeOff v-if="filter.visible === false" class="w-3 h-3" />
+                                      <Eye v-else class="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0"
+                                      @click="openEditFilterDialog(index)"
+                                      title="高级配置"
+                                    >
+                                      <Settings2 class="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                      @click="handleDeleteFilter(index)"
+                                    >
+                                      <Trash2 class="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            </template>
+                          </draggable>
+                        </table>
+                      </div>
+                            <div v-if="currentPageConfig.filterArea.filters.length === 0" class="flex flex-col items-center justify-center py-8 border border-dashed rounded-md bg-muted/5 mx-3 mb-3">
+                          <Search class="w-5 h-5 text-muted-foreground/40 mb-2" />
+                          <p class="text-xs text-muted-foreground">暂无筛选项</p>
+                        </div>
+                        </div>
+                    </div>
+                  </TabsContent>
 
-              <!-- 卡片区配置 -->
-              <div class="border rounded-lg">
-                <div class="p-4 border-b flex items-center justify-between bg-muted/30">
-                  <div class="flex items-center gap-3">
-                    <h4 class="font-semibold">卡片区配置</h4>
-                    <div class="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        :checked="currentPageConfig.cardArea?.show !== false"
-                        @change="toggleAreaShow('cardArea')"
-                        class="rounded"
-                      />
-                      <label class="text-xs text-muted-foreground">显示</label>
+                  <!-- 操作区配置 -->
+                  <TabsContent value="actions" class="m-0 focus-visible:ring-0">
+                    <div class="rounded-lg border bg-card">
+                      <div class="p-3">
+                        <!-- 布局配置与添加按钮 -->
+                        <div class="flex items-center justify-between gap-4 p-2.5 bg-muted/40 rounded-md text-xs">
+                          <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5">
+                               <input 
+                                type="checkbox" 
+                                :checked="currentPageConfig.actionsArea?.show !== false"
+                                @change="toggleAreaShow('actionsArea')"
+                                class="rounded border-input text-primary focus:ring-primary w-3 h-3"
+                              />
+                              <label class="text-xs text-muted-foreground">显示操作区</label>
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm" class="h-6 text-[10px] px-2" @click="openAddActionDialog">
+                            <Plus class="w-3 h-3 mr-1" />
+                            添加按钮
+                          </Button>
+                        </div>
+                      </div>
+                        <!-- Action List -->
+                        <div class="px-3 pb-3">
+                        <div class="border rounded-md" v-if="currentPageConfig.actionsArea?.buttons && currentPageConfig.actionsArea.buttons.length > 0">
+                        <table class="w-full border-collapse">
+                          <thead>
+                            <tr class="border-b bg-muted/50">
+                              <th class="w-8 p-2 border-r border-border/50"></th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">标签</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">Key</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">样式</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">自定义类名</th>
+                              <th class="text-right p-2 text-xs font-medium w-16">操作</th>
+                            </tr>
+                          </thead>
+                          <draggable 
+                            v-model="actionList"
+                            tag="tbody"
+                            item-key="key"
+                            handle=".drag-handle"
+                            :animation="200"
+                          >
+                            <template #item="{ element: action, index }">
+                              <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                <td class="p-1.5 border-r border-border/50">
+                                  <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                                </td>
+                                <!-- 标签 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="action.label" 
+                                    class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="按钮名称"
+                                  />
+                                </td>
+                                <!-- Key - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="action.key" 
+                                    class="h-7 text-xs font-mono w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="key"
+                                  />
+                                </td>
+                                <!-- 样式 - 下拉框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Select 
+                                    :model-value="action.variant || 'default'"
+                                    @update:model-value="(v) => action.variant = String(v) as 'default' | 'outline' | 'secondary' | 'ghost'"
+                                  >
+                                    <SelectTrigger class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus:bg-background focus:border-input focus:shadow-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="default">Default</SelectItem>
+                                      <SelectItem value="outline">Outline</SelectItem>
+                                      <SelectItem value="secondary">Secondary</SelectItem>
+                                      <SelectItem value="ghost">Ghost</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <!-- 自定义类名 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="action.className" 
+                                    class="h-7 text-xs font-mono w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="class..."
+                                  />
+                                </td>
+                                <!-- 操作按钮 -->
+                                <td class="p-1">
+                                  <div class="flex gap-0.5 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0"
+                                      :class="action.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                      @click="toggleActionVisibility(index)"
+                                      :title="action.visible === false ? '点击显示' : '点击隐藏'"
+                                    >
+                                      <EyeOff v-if="action.visible === false" class="w-3 h-3" />
+                                      <Eye v-else class="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                      @click="handleDeleteAction(index)"
+                                    >
+                                      <Trash2 class="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            </template>
+                          </draggable>
+                        </table>
+                      </div>
+                            <div v-if="!currentPageConfig.actionsArea?.buttons || currentPageConfig.actionsArea.buttons.length === 0" class="flex flex-col items-center justify-center py-8 border border-dashed rounded-md bg-muted/5 mx-3 mb-3">
+                          <MoreHorizontal class="w-5 h-5 text-muted-foreground/40 mb-2" />
+                          <p class="text-xs text-muted-foreground">暂无操作按钮</p>
+                        </div>
+                        </div>
                     </div>
-                  </div>
-                  <Button variant="outline" size="sm" @click="openAddCardDialog">
-                    <Plus class="w-4 h-4 mr-1" />
-                    添加卡片
-                  </Button>
-                </div>
-                <div class="p-4 space-y-4">
-                  <!-- 布局配置 -->
-                  <div class="flex items-center gap-6">
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm text-muted-foreground">列数:</label>
-                      <Input 
-                        :model-value="currentPageConfig.cardArea?.columns || 4"
-                        @update:model-value="(v: string | number) => { if (currentPageConfig && currentPageConfig.cardArea) currentPageConfig.cardArea.columns = Number(v) }"
-                        type="number"
-                        class="w-20 h-8"
-                      />
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm text-muted-foreground">间距:</label>
-                      <Input 
-                        :model-value="currentPageConfig.cardArea?.gap || '16px'"
-                        @update:model-value="(v: string | number) => { if (currentPageConfig && currentPageConfig.cardArea) currentPageConfig.cardArea.gap = String(v) }"
-                        class="w-24 h-8"
-                        placeholder="如 16px"
-                      />
-                    </div>
-                  </div>
-                  <!-- 卡片列表 - Table -->
-                  <div class="border rounded-md" v-if="currentPageConfig.cardArea?.cards && currentPageConfig.cardArea.cards.length > 0">
-                    <table class="w-full">
-                      <thead>
-                        <tr class="border-b bg-muted/50">
-                          <th class="w-8 p-2"></th>
-                          <th class="text-left p-2 text-sm font-medium">Key</th>
-                          <th class="text-left p-2 text-sm font-medium">标题</th>
-                          <th class="text-left p-2 text-sm font-medium">数据</th>
-                          <th class="text-right p-2 text-sm font-medium w-20">操作</th>
-                        </tr>
-                      </thead>
-                      <draggable 
-                        v-model="cardList"
-                        tag="tbody"
-                        item-key="key"
-                        handle=".drag-handle"
-                        :animation="200"
-                      >
-                        <template #item="{ element: card, index }">
-                          <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                            <td class="p-2">
-                              <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
-                            </td>
-                            <td class="p-2">
-                              <code class="text-xs text-muted-foreground">{{ card.key }}</code>
-                            </td>
-                            <td class="p-2 text-sm">{{ card.title }}</td>
-                            <td class="p-2 text-sm text-muted-foreground">{{ card.data }}</td>
-                            <td class="p-2">
-                              <div class="flex gap-1 justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  @click="openEditCardDialog(index)"
-                                >
-                                  <Pencil class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                  @click="handleDeleteCard(index)"
-                                >
-                                  <Trash2 class="w-3 h-3" />
-                                </Button>
+                  </TabsContent>
+
+                  <!-- 卡片区配置 -->
+                  <TabsContent value="card" class="m-0 focus-visible:ring-0">
+                    <div class="rounded-lg border bg-card">
+                      <div class="p-3">
+                        <!-- 布局配置与添加按钮 -->
+                        <div class="flex items-center justify-between gap-4 p-2.5 bg-muted/40 rounded-md text-xs">
+                          <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-1.5">
+                              <input 
+                                type="checkbox" 
+                                :checked="currentPageConfig.cardArea?.show !== false"
+                                @change="toggleAreaShow('cardArea')"
+                                class="rounded border-input text-primary focus:ring-primary w-3 h-3"
+                              />
+                              <label class="text-xs text-muted-foreground">显示卡片区</label>
+                            </div>
+                            <div class="h-4 w-px bg-border"></div>
+                            <div class="flex items-center gap-2">
+                              <label class="text-xs text-muted-foreground">每行:</label>
+                              <div class="flex items-center">
+                                <Input 
+                                  :model-value="currentPageConfig.cardArea?.columns || 4"
+                                  @update:model-value="(v: string | number) => { if (currentPageConfig && currentPageConfig.cardArea) currentPageConfig.cardArea.columns = Number(v) }"
+                                  type="number"
+                                  class="w-12 h-6 text-xs rounded-r-none border-r-0 focus-visible:ring-0"
+                                />
+                                 <div class="h-6 px-1.5 flex items-center bg-muted border rounded-r-md text-[10px] text-muted-foreground">列</div>
                               </div>
-                            </td>
-                          </tr>
-                        </template>
-                      </draggable>
-                    </table>
-                  </div>
-                  <div v-if="!currentPageConfig.cardArea?.cards || currentPageConfig.cardArea.cards.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
-                    暂无卡片配置
-                  </div>
-                </div>
-              </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <label class="text-xs text-muted-foreground">间距:</label>
+                               <Input 
+                                :model-value="currentPageConfig.cardArea?.gap || '16px'"
+                                @update:model-value="(v: string | number) => { if (currentPageConfig && currentPageConfig.cardArea) currentPageConfig.cardArea.gap = String(v) }"
+                                class="w-16 h-6 text-xs"
+                                placeholder="16px"
+                              />
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm" class="h-6 text-[10px] px-2" @click="openAddCardDialog">
+                            <Plus class="w-3 h-3 mr-1" />
+                            添加卡片
+                          </Button>
+                        </div>
+                      </div>
+                        <!-- 卡片列表 -->
+                        <div class="px-3 pb-3">
+                        <div class="border rounded-md" v-if="currentPageConfig.cardArea?.cards && currentPageConfig.cardArea.cards.length > 0">
+                        <table class="w-full border-collapse">
+                          <thead>
+                            <tr class="border-b bg-muted/50">
+                              <th class="w-8 p-2 border-r border-border/50"></th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">Key</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">标题</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">数据</th>
+                              <th class="text-right p-2 text-xs font-medium w-16">操作</th>
+                            </tr>
+                          </thead>
+                          <draggable 
+                            v-model="cardList"
+                            tag="tbody"
+                            item-key="key"
+                            handle=".drag-handle"
+                            :animation="200"
+                          >
+                            <template #item="{ element: card, index }">
+                              <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                <td class="p-1.5 border-r border-border/50">
+                                  <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                                </td>
+                                <!-- Key - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="card.key" 
+                                    class="h-7 text-xs font-mono w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="key"
+                                  />
+                                </td>
+                                <!-- 标题 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="card.title" 
+                                    class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="标题"
+                                  />
+                                </td>
+                                <!-- 数据 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="card.data" 
+                                    class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="数据值"
+                                  />
+                                </td>
+                                <!-- 操作按钮 -->
+                                <td class="p-1">
+                                  <div class="flex gap-0.5 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                      @click="handleDeleteCard(index)"
+                                    >
+                                      <Trash2 class="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            </template>
+                          </draggable>
+                        </table>
+                      </div>
+                            <div v-if="!currentPageConfig.cardArea?.cards || currentPageConfig.cardArea.cards.length === 0" class="flex flex-col items-center justify-center py-8 border border-dashed rounded-md bg-muted/5 mx-3 mb-3">
+                          <Layers class="w-5 h-5 text-muted-foreground/40 mb-2" />
+                          <p class="text-xs text-muted-foreground">暂无卡片配置</p>
+                        </div>
+                        </div>
+                    </div>
+                  </TabsContent>
 
-              <!-- 表格区配置 -->
-              <div class="border rounded-lg">
-                <div class="p-4 border-b flex items-center justify-between bg-muted/30">
-                  <h4 class="font-semibold">表格区配置</h4>
-                  <Button variant="outline" size="sm" @click="openAddColumnDialog">
-                    <Plus class="w-4 h-4 mr-1" />
-                    添加列
-                  </Button>
+                  <!-- 表格区配置 -->
+                  <TabsContent value="table" class="m-0 focus-visible:ring-0">
+                    <div class="rounded-lg border bg-card">
+                      <div class="p-3">
+                        <!-- 布局配置与添加按钮 -->
+                        <div class="flex items-center justify-between gap-4 p-2.5 bg-muted/40 rounded-md text-xs">
+                          <div class="flex items-center gap-3 flex-wrap">
+                            <div class="flex items-center gap-2">
+                              <label class="text-xs text-muted-foreground">高度:</label>
+                               <Input 
+                                :model-value="currentPageConfig.tableArea.height"
+                                @update:model-value="handleUpdateTableArea('height', $event)"
+                                class="w-16 h-7 text-xs"
+                              />
+                            </div>
+                            <div class="flex items-center gap-2">
+                              <label class="text-xs text-muted-foreground">每页:</label>
+                               <Input 
+                                :model-value="currentPageConfig.tableArea.pageSize || 15"
+                                @update:model-value="handleUpdateTableArea('pageSize', Number($event))"
+                                type="number"
+                                class="w-14 h-7 text-xs"
+                              />
+                              <span class="text-xs text-muted-foreground">行</span>
+                            </div>
+                            <div class="h-4 w-px bg-border"></div>
+                            <div class="flex items-center gap-1.5">
+                               <input 
+                                type="checkbox" 
+                                :checked="currentPageConfig.tableArea.scrollX"
+                                @change="handleUpdateTableArea('scrollX', ($event.target as HTMLInputElement).checked)"
+                                class="rounded border-input text-primary focus:ring-primary w-3 h-3"
+                              />
+                              <label class="text-xs text-muted-foreground">横向滚动</label>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                               <input 
+                                type="checkbox" 
+                                :checked="currentPageConfig.tableArea.scrollY"
+                                @change="handleUpdateTableArea('scrollY', ($event.target as HTMLInputElement).checked)"
+                                class="rounded border-input text-primary focus:ring-primary w-3 h-3"
+                              />
+                              <label class="text-xs text-muted-foreground">纵向滚动</label>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                               <input 
+                                type="checkbox" 
+                                :checked="currentPageConfig.tableArea.showCheckbox"
+                                @change="handleUpdateTableArea('showCheckbox', ($event.target as HTMLInputElement).checked)"
+                                class="rounded border-input text-primary focus:ring-primary w-3 h-3"
+                              />
+                              <label class="text-xs text-muted-foreground">复选框</label>
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm" class="h-7 text-xs px-2" @click="openAddColumnDialog">
+                            <Plus class="w-3 h-3 mr-1" />
+                            添加列
+                          </Button>
+                        </div>
+                      </div>
+                        <!-- 列配置列表 -->
+                        <div class="px-3 pb-3">
+                        <div class="border rounded-md" v-if="currentPageConfig.tableArea.columns.length > 0">
+                        <table class="w-full border-collapse">
+                          <thead>
+                            <tr class="border-b bg-muted/50">
+                              <th class="w-8 p-2 border-r border-border/50"></th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">类型</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">标签</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">字段名</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">宽度</th>
+                              <th class="text-left p-2 text-xs font-medium border-r border-border/50">数据格式</th>
+                              <th class="text-right p-2 text-xs font-medium w-16">操作</th>
+                            </tr>
+                          </thead>
+                          <draggable 
+                            v-model="columnList"
+                            tag="tbody"
+                            item-key="key"
+                            handle=".drag-handle"
+                            :animation="200"
+                          >
+                            <template #item="{ element: col, index }">
+                              <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                <td class="p-1.5 border-r border-border/50">
+                                  <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
+                                </td>
+                                <!-- 类型 - 下拉框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Select 
+                                    :model-value="col.type || 'text'"
+                                    @update:model-value="(v) => col.type = String(v) as 'text' | 'badge' | 'status-badge' | 'text-button'"
+                                  >
+                                    <SelectTrigger class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus:bg-background focus:border-input focus:shadow-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="text">文本</SelectItem>
+                                      <SelectItem value="badge">Badge</SelectItem>
+                                      <SelectItem value="status-badge">状态</SelectItem>
+                                      <SelectItem value="text-button">按钮</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <!-- 标签 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="col.label" 
+                                    class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="标签"
+                                  />
+                                </td>
+                                <!-- 字段名 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="col.key" 
+                                    class="h-7 text-xs font-mono w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="key"
+                                  />
+                                </td>
+                                <!-- 宽度 - 输入框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Input 
+                                    v-model="col.width" 
+                                    class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus-visible:bg-background focus-visible:border-input focus-visible:shadow-sm"
+                                    placeholder="100px"
+                                  />
+                                </td>
+                                <!-- 数据格式 - 下拉框 -->
+                                <td class="p-1 border-r border-border/50">
+                                  <Select 
+                                    :model-value="col.mockFormat || 'none'"
+                                    @update:model-value="(v) => col.mockFormat = String(v) === 'none' ? undefined : String(v) as 'text' | 'datetime' | 'number'"
+                                  >
+                                    <SelectTrigger class="h-7 text-xs w-full border-transparent bg-transparent shadow-none hover:bg-muted/50 focus:bg-background focus:border-input focus:shadow-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">无</SelectItem>
+                                      <SelectItem value="text">文本</SelectItem>
+                                      <SelectItem value="datetime">时间</SelectItem>
+                                      <SelectItem value="number">数字</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <!-- 操作按钮 -->
+                                <td class="p-1">
+                                  <div class="flex gap-0.5 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0"
+                                      :class="col.visible === false ? 'text-muted-foreground' : 'text-foreground'"
+                                      @click="toggleColumnVisibility(index)"
+                                      :title="col.visible === false ? '点击显示' : '点击隐藏'"
+                                    >
+                                      <EyeOff v-if="col.visible === false" class="w-3 h-3" />
+                                      <Eye v-else class="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                      @click="handleDeleteColumn(index)"
+                                    >
+                                      <Trash2 class="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            </template>
+                          </draggable>
+                        </table>
+                      </div>
+                            <div v-if="currentPageConfig.tableArea.columns.length === 0" class="flex flex-col items-center justify-center py-8 border border-dashed rounded-md bg-muted/5 mx-3 mb-3">
+                          <FileCode class="w-5 h-5 text-muted-foreground/40 mb-2" />
+                          <p class="text-xs text-muted-foreground">暂无表格列</p>
+                        </div>
+                        </div>
+                    </div>
+                  </TabsContent>
                 </div>
-                <div class="p-4 space-y-4">
-                  <!-- 表格设置 -->
-                  <div class="flex items-center gap-6 flex-wrap">
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm text-muted-foreground">高度:</label>
-                      <Input 
-                        :model-value="currentPageConfig.tableArea.height"
-                        @update:model-value="handleUpdateTableArea('height', $event)"
-                        class="w-24 h-8"
-                      />
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        :checked="currentPageConfig.tableArea.scrollX"
-                        @change="handleUpdateTableArea('scrollX', ($event.target as HTMLInputElement).checked)"
-                        class="rounded"
-                      />
-                      <label class="text-sm">横向滚动</label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        :checked="currentPageConfig.tableArea.scrollY"
-                        @change="handleUpdateTableArea('scrollY', ($event.target as HTMLInputElement).checked)"
-                        class="rounded"
-                      />
-                      <label class="text-sm">纵向滚动</label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        :checked="currentPageConfig.tableArea.showCheckbox"
-                        @change="handleUpdateTableArea('showCheckbox', ($event.target as HTMLInputElement).checked)"
-                        class="rounded"
-                      />
-                      <label class="text-sm">显示复选框</label>
-                    </div>
-                  </div>
-                  <!-- 列配置列表 - Table (Issue 9: 支持拖拽排序) -->
-                  <div class="border rounded-md" v-if="currentPageConfig.tableArea.columns.length > 0">
-                    <table class="w-full">
-                      <thead>
-                        <tr class="border-b bg-muted/50">
-                          <th class="w-8 p-2"></th>
-                          <th class="text-left p-2 text-sm font-medium">类型</th>
-                          <th class="text-left p-2 text-sm font-medium">标签</th>
-                          <th class="text-left p-2 text-sm font-medium">字段名</th>
-                          <th class="text-left p-2 text-sm font-medium">宽度</th>
-                          <th class="text-right p-2 text-sm font-medium w-20">操作</th>
-                        </tr>
-                      </thead>
-                      <draggable 
-                        v-model="columnList"
-                        tag="tbody"
-                        item-key="key"
-                        handle=".drag-handle"
-                        :animation="200"
-                      >
-                        <template #item="{ element: col, index }">
-                          <tr class="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                            <td class="p-2">
-                              <GripVertical class="w-4 h-4 text-muted-foreground cursor-grab drag-handle" />
-                            </td>
-                            <td class="p-2">
-                              <Badge variant="outline" class="text-xs">{{ col.type || 'text' }}</Badge>
-                            </td>
-                            <td class="p-2 text-sm">{{ col.label }}</td>
-                            <td class="p-2">
-                              <code class="text-xs text-muted-foreground">{{ col.key }}</code>
-                            </td>
-                            <td class="p-2 text-xs text-muted-foreground">
-                              {{ col.width || '-' }}
-                            </td>
-                            <td class="p-2">
-                              <div class="flex gap-1 justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  :class="col.visible === false ? 'text-muted-foreground' : 'text-foreground'"
-                                  @click="toggleColumnVisibility(index)"
-                                  :title="col.visible === false ? '点击显示' : '点击隐藏'"
-                                >
-                                  <EyeOff v-if="col.visible === false" class="w-3 h-3" />
-                                  <Eye v-else class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0"
-                                  @click="openEditColumnDialog(index)"
-                                >
-                                  <Pencil class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                  @click="handleDeleteColumn(index)"
-                                >
-                                  <Trash2 class="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        </template>
-                      </draggable>
-                    </table>
-                  </div>
-                  <div v-if="currentPageConfig.tableArea.columns.length === 0" class="text-sm text-muted-foreground text-center py-8 border-2 border-dashed rounded-md">
-                    暂无表格列
-                  </div>
-                </div>
-              </div>
-
+              </Tabs>
             </template>
           </div>
       </div>
@@ -1485,19 +1657,6 @@ const handleFileSelected = (event: Event) => {
         <div class="space-y-2">
           <label class="text-sm font-medium">标题</label>
           <Input v-model="navForm.title" placeholder="输入导航标题" />
-        </div>
-        <div class="space-y-2">
-          <label class="text-sm font-medium">模板</label>
-          <Select v-model="navForm.template">
-            <SelectTrigger class="w-full">
-              <SelectValue placeholder="选择模板" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">无模板</SelectItem>
-              <SelectItem value="Page1">Page1</SelectItem>
-              <SelectItem value="Page2">Page2</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
         <!-- Issue 4 & 5: 提示信息 -->
         <div class="flex items-start gap-2 p-3 rounded-md bg-muted/50 text-sm text-muted-foreground">
@@ -1606,9 +1765,32 @@ const handleFileSelected = (event: Event) => {
                 <SelectItem value="text">文本</SelectItem>
                 <SelectItem value="badge">Badge</SelectItem>
                 <SelectItem value="status-badge">状态 Badge</SelectItem>
+                <SelectItem value="text-button">文字按钮</SelectItem>
               </SelectContent>
             </Select>
           </div>
+        </div>
+        <!-- 按钮列表配置 -->
+        <div v-if="columnForm.type === 'text-button'" class="space-y-2">
+          <label class="text-sm font-medium">按钮列表 (逗号分隔)</label>
+          <Input v-model="columnForm.buttons" placeholder="如 增加, 删除" />
+          <p class="text-xs text-muted-foreground">多个按钮之间用逗号分隔</p>
+        </div>
+        <!-- 虚拟数据格式 -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium">虚拟数据格式</label>
+          <Select v-model="columnForm.mockFormat">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="选择虚拟数据格式 (可选)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">无</SelectItem>
+              <SelectItem value="text">文本格式 (标签1, 标签2...)</SelectItem>
+              <SelectItem value="datetime">时间格式 (2026-1-15 xx:xx:xx)</SelectItem>
+              <SelectItem value="number">数字格式 (随机5位数)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-xs text-muted-foreground">选择后将自动生成对应格式的模拟数据</p>
         </div>
       </div>
       <DialogFooter>
@@ -1767,6 +1949,22 @@ const handleFileSelected = (event: Event) => {
     </AlertDialogContent>
   </AlertDialog>
 
+  <!-- 导入确认对话框 -->
+  <AlertDialog v-model:open="importConfirmDialogOpen">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>确认导入配置</AlertDialogTitle>
+        <AlertDialogDescription>
+          导入配置将覆盖当前设置并同步到云端。确定要继续吗？
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel @click="importConfirmDialogOpen = false">取消</AlertDialogCancel>
+        <AlertDialogAction @click="handleConfirmImport">确认导入</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+
   </div>
 </template>
 
@@ -1774,5 +1972,28 @@ const handleFileSelected = (event: Event) => {
 .settings-root {
   height: 100%;
   display: contents;
+}
+
+/* Custom scrollbar for navigation */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.3);
 }
 </style>

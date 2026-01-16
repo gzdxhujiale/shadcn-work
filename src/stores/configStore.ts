@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { defaultSidebarConfig } from '@/config/sidebar'
-import { page1Configs as defaultPage1Configs } from '@/config/page1'
+import { setNavGroupsRef, initNavigation } from '@/config/sidebar'
+// 移除默认配置导入 - 改用纯云端配置
+import { supabase } from '@/lib/supabase'
+import { toast } from 'vue-sonner'
 
 // ============================================
 // 导航配置类型定义
@@ -49,21 +51,6 @@ export type {
 const STORAGE_KEY_PAGE1_CONFIGS = 'shadcn_page1_configs'
 
 // ============================================
-// Helper: Load from localStorage
-// ============================================
-function loadPage1ConfigsFromStorage(): Record<string, Page1Config> | null {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY_PAGE1_CONFIGS)
-        if (saved) {
-            return JSON.parse(saved)
-        }
-    } catch (e) {
-        console.warn('Failed to load page1Configs from localStorage:', e)
-    }
-    return null
-}
-
-// ============================================
 // Helper: Save to localStorage
 // ============================================
 function savePage1ConfigsToStorage(configs: Record<string, Page1Config>) {
@@ -79,43 +66,81 @@ function savePage1ConfigsToStorage(configs: Record<string, Page1Config>) {
 // ============================================
 
 export const useConfigStore = defineStore('config', () => {
-    // State - 使用深拷贝初始化，避免直接修改源配置
-    const navGroups = ref<NavGroup[]>(JSON.parse(JSON.stringify(defaultSidebarConfig.navGroups)))
+    // ============================================
+    // State - 初始化为空，等待云端配置加载
+    // ============================================
+    const navGroups = ref<NavGroup[]>([])
+    const page1Configs = ref<Record<string, Page1Config>>({})
+    const mockDataFunctions = ref<Record<string, () => any[]>>({})
 
-    // 尝试从 localStorage 加载配置，并与默认配置合并
-    // 这样可以保留默认配置，同时 localStorage 中的配置可以覆盖或添加新的
-    const savedConfigs = loadPage1ConfigsFromStorage()
-    const defaultConfigsClone = JSON.parse(JSON.stringify(defaultPage1Configs, (_key, value) => {
-        // 函数不能序列化，需要排除
-        if (typeof value === 'function') return undefined
-        return value
-    }))
+    // 预览模式状态
+    const previewMode = ref<'append' | 'override' | null>(null)
+    const previewConfig = ref<Page1Config | null>(null)
+    const previewNavId = ref('preview-temp-id')
 
-    // 合并配置：默认配置 + localStorage 配置
-    // localStorage 中的配置会覆盖默认配置中相同 ID 的配置
-    const mergedConfigs: Record<string, Page1Config> = {
-        ...defaultConfigsClone,
-        ...(savedConfigs || {})
-    }
+    // 加载状态
+    const isConfigLoaded = ref(false)
+    const isConfigLoading = ref(false)
 
-    const page1Configs = ref<Record<string, Page1Config>>(mergedConfigs)
-
-    // 保存 mockData 函数引用（不能序列化）
-    const initialMockFunctions: Record<string, () => any[]> = {}
-    Object.keys(defaultPage1Configs).forEach(key => {
-        initialMockFunctions[key] = defaultPage1Configs[key].mockData
-    })
-    const mockDataFunctions = ref<Record<string, () => any[]>>(initialMockFunctions)
-
-    // 监听配置变化，自动保存到 localStorage
+    // 监听配置变化，自动保存到 localStorage（仅在配置已加载后）
     watch(page1Configs, (newConfigs) => {
-        savePage1ConfigsToStorage(newConfigs)
+        if (isConfigLoaded.value) {
+            savePage1ConfigsToStorage(newConfigs)
+        }
     }, { deep: true })
 
+    // 同步 navGroups 到 sidebar 导航系统（用于模板查找）
+    watch(navGroups, (newNavGroups) => {
+        setNavGroupsRef(newNavGroups)
+    }, { deep: true, immediate: true })
+
     // Getters
-    const getNavGroup = computed(() => (index: number) => navGroups.value[index])
+    const isInPreviewMode = computed(() => previewMode.value !== null)
+
+    const effectiveNavGroups = computed(() => {
+        if (!isInPreviewMode.value || !previewConfig.value) {
+            return navGroups.value
+        }
+
+        const previewItem: NavMainItem = {
+            id: 'preview-main',
+            title: 'AI 预览',
+            url: '#', // 添加必要的 url 属性
+            isOpen: true,
+            items: [{
+                id: previewNavId.value,
+                title: '预览页面',
+                url: '#/preview',
+                template: 'Page1',
+                component: previewConfig.value
+            }]
+        }
+
+        if (previewMode.value === 'override') {
+            return [{
+                label: '预览',
+                items: [previewItem]
+            }]
+        } else {
+            return [...navGroups.value, {
+                label: 'AI 预览',
+                showLabel: true,
+                items: [previewItem]
+            }]
+        }
+    })
+
+    const getNavGroup = computed(() => (index: number) => effectiveNavGroups.value[index])
 
     const getPage1Config = computed(() => (navId: string): Page1Config | undefined => {
+        // 优先检查预览模式
+        if (isInPreviewMode.value && navId === previewNavId.value && previewConfig.value) {
+            return {
+                ...previewConfig.value,
+                mockData: () => [] // 预览模式通常不需要 mock 数据或使用默认空数组
+            }
+        }
+
         const config = page1Configs.value[navId]
         if (config) {
             return {
@@ -125,6 +150,24 @@ export const useConfigStore = defineStore('config', () => {
         }
         return undefined
     })
+
+    // Preview Actions
+    function setPreviewConfig(config: Page1Config, mode: 'append' | 'override' = 'override') {
+        previewConfig.value = config
+        previewMode.value = mode
+        // 如果是 override 模式，可能需要重定向到预览页面
+    }
+
+    function clearPreviewConfig() {
+        previewMode.value = null
+        previewConfig.value = null
+    }
+
+    function applyPreviewConfig() {
+        // TODO: 实现根据预览配置更新实际配置的逻辑
+        // 这可能需要一个新的 actions 支持，或者只是提示用户
+        console.log('Applying preview config is not fully implemented yet')
+    }
 
     // ============================================
     // Navigation CRUD Actions
@@ -211,12 +254,13 @@ export const useConfigStore = defineStore('config', () => {
         page1Configs.value[navId] = config as Page1Config
         mockDataFunctions.value[navId] = () => []
 
-        // 自动将对应导航项的 template 设置为 'Page1'
+        // 自动将对应导航项的 component 字段设置为配置对象 (Update for Phase 2)
         for (const group of navGroups.value) {
             for (const mainItem of group.items) {
                 const subItem = mainItem.items?.find(s => s.id === navId)
                 if (subItem) {
-                    subItem.template = 'Page1'
+                    subItem.component = config as Page1Config
+                    // subItem.template = 'Page1' 
                 }
             }
         }
@@ -260,13 +304,14 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     // ============================================
-    // 重置为默认配置
+    // 重置配置（清空本地配置）
     // ============================================
     function resetToDefaults() {
-        page1Configs.value = JSON.parse(JSON.stringify(defaultPage1Configs, (_key, value) => {
-            if (typeof value === 'function') return undefined
-            return value
-        }))
+        // 清空配置
+        navGroups.value = []
+        page1Configs.value = {}
+        mockDataFunctions.value = {}
+        isConfigLoaded.value = false
         localStorage.removeItem(STORAGE_KEY_PAGE1_CONFIGS)
     }
 
@@ -545,9 +590,11 @@ export interface TableColumn {
     label: string
     width?: string                    // 列宽，如 '100px'
     minWidth?: string                 // 最小宽度
-    type?: 'text' | 'badge' | 'status-badge'
+    type?: 'text' | 'badge' | 'status-badge' | 'text-button'
     fixed?: 'left' | 'right'          // 列固定位置
     visible?: boolean
+    mockFormat?: 'text' | 'datetime' | 'number' // 虚拟数据格式
+    buttons?: string[] // 文字按钮列表
 }
 
 /**
@@ -560,6 +607,7 @@ export interface TableAreaConfig {
     scrollY?: boolean       // 是否启用纵向滚动
     showCheckbox?: boolean  // 是否显示复选框列
     fixedLayout?: boolean   // 是否使用固定布局
+    pageSize?: number       // 每页显示行数
     columns: TableColumn[]
 }
 
@@ -712,6 +760,10 @@ export const page1Configs: Record<string, Page1Config> = {
                 if (col.type) code += `, type: '${col.type}'`
                 if (col.fixed) code += `, fixed: '${col.fixed}'`
                 if (col.visible === false) code += `, visible: false`
+                if (col.mockFormat) code += `, mockFormat: '${col.mockFormat}'`
+                if (col.buttons && col.buttons.length > 0) {
+                    code += `, buttons: [${col.buttons.map(b => `'${b}'`).join(', ')}]`
+                }
                 code += ` },\n`
             })
             code += `            ],\n`
@@ -757,6 +809,7 @@ export function getPage1Config(navId: string): Page1Config | undefined {
                     title: string
                     url?: string
                     template?: string
+                    component?: Omit<Page1Config, 'mockData'> // 内嵌页面配置 (Phase 2)
                 }>
             }>
         }>
@@ -767,8 +820,43 @@ export function getPage1Config(navId: string): Page1Config | undefined {
      * 获取模板配置（供下载）
      */
     function getTemplateConfig(): ExportData {
+        const exampleComponentConfig: Omit<Page1Config, 'mockData'> = {
+            filterArea: {
+                columns: 4,
+                gap: '16px',
+                filters: [
+                    { key: 'keyword', type: 'input', label: '关键词', placeholder: '请输入关键词', defaultValue: '' },
+                    { key: 'status', type: 'select', label: '状态', defaultValue: '全部', options: ['全部', '待审核', '已通过', '已拒绝'] }
+                ]
+            },
+            actionsArea: {
+                show: true,
+                buttons: [
+                    { key: 'search', label: '查询', variant: 'outline' },
+                    { key: 'reset', label: '重置', variant: 'outline' }
+                ]
+            },
+            cardArea: {
+                show: false,
+                columns: 4,
+                gap: '16px',
+                cards: []
+            },
+            tableArea: {
+                height: '500px',
+                scrollX: true,
+                scrollY: true,
+                showCheckbox: true,
+                fixedLayout: true,
+                columns: [
+                    { key: 'id', label: 'ID', width: '80px' },
+                    { key: 'name', label: '名称', width: '150px' }
+                ]
+            }
+        }
+
         return {
-            version: '1.0',
+            version: '2.0', // Updated version
             exportedAt: new Date().toISOString(),
             navGroups: [
                 {
@@ -780,49 +868,19 @@ export function getPage1Config(navId: string): Page1Config | undefined {
                             title: '示例主导航',
                             isOpen: true,
                             items: [
-                                { id: 'example-1', title: '示例页面1', url: '#', template: 'Page1' },
-                                { id: 'example-2', title: '示例页面2', url: '#', template: 'Page1' }
+                                {
+                                    id: 'example-1',
+                                    title: '示例页面1',
+                                    url: '#',
+                                    // Removed template field
+                                    component: exampleComponentConfig
+                                }
                             ]
                         }
                     ]
                 }
             ],
-            pageConfigs: {
-                'example-1': {
-                    filterArea: {
-                        columns: 4,
-                        gap: '16px',
-                        filters: [
-                            { key: 'keyword', type: 'input', label: '关键词', placeholder: '请输入关键词', defaultValue: '' },
-                            { key: 'status', type: 'select', label: '状态', defaultValue: '全部', options: ['全部', '待审核', '已通过', '已拒绝'] }
-                        ]
-                    },
-                    actionsArea: {
-                        show: true,
-                        buttons: [
-                            { key: 'search', label: '查询', variant: 'outline' },
-                            { key: 'reset', label: '重置', variant: 'outline' }
-                        ]
-                    },
-                    cardArea: {
-                        show: false,
-                        columns: 4,
-                        gap: '16px',
-                        cards: []
-                    },
-                    tableArea: {
-                        height: '500px',
-                        scrollX: true,
-                        scrollY: true,
-                        showCheckbox: true,
-                        fixedLayout: true,
-                        columns: [
-                            { key: 'id', label: 'ID', width: '80px' },
-                            { key: 'name', label: '名称', width: '150px' }
-                        ]
-                    }
-                }
-            }
+            pageConfigs: {} // Keep empty for type compatibility, or remove if type allows (type says it's required in interface, we can make it partial or just empty)
         }
     }
 
@@ -830,7 +888,7 @@ export function getPage1Config(navId: string): Page1Config | undefined {
      * 导出完整配置
      */
     function exportFullConfig(): ExportData {
-        // 构建导航组数据（不包含 icon 等不可序列化的属性）
+        // 构建导航组数据（包含内嵌的页面配置）
         const exportNavGroups = navGroups.value.map(group => ({
             label: group.label,
             showLabel: group.showLabel,
@@ -838,27 +896,41 @@ export function getPage1Config(navId: string): Page1Config | undefined {
                 id: mainItem.id,
                 title: mainItem.title,
                 isOpen: mainItem.isOpen,
-                items: mainItem.items?.map(subItem => ({
-                    id: subItem.id,
-                    title: subItem.title,
-                    url: subItem.url,
-                    template: subItem.template
-                }))
+                items: mainItem.items?.map(subItem => {
+                    // 获取页面配置（如果有）
+                    const pageConfig = page1Configs.value[subItem.id]
+                    let componentConfig: Omit<Page1Config, 'mockData'> | undefined
+
+                    if (pageConfig) {
+                        const { mockData, ...rest } = pageConfig
+                        // Create a clean copy of the config without internal flags if any
+                        componentConfig = {
+                            ...rest,
+                            // Ensure areas match structure
+                            ...(rest.topBar && { topBar: rest.topBar }),
+                            filterArea: rest.filterArea,
+                            ...(rest.actionsArea && { actionsArea: rest.actionsArea }),
+                            ...(rest.cardArea && { cardArea: rest.cardArea }),
+                            tableArea: rest.tableArea,
+                        }
+                    }
+
+                    return {
+                        id: subItem.id,
+                        title: subItem.title,
+                        url: subItem.url,
+                        // template 字段不再导出，或者设为空
+                        component: componentConfig // Phase 2: 内嵌配置
+                    }
+                })
             }))
         }))
 
-        // 构建页面配置（排除 mockData 函数）
-        const exportPageConfigs: Record<string, Omit<Page1Config, 'mockData'>> = {}
-        Object.entries(page1Configs.value).forEach(([navId, config]) => {
-            const { mockData: _, ...rest } = config as Page1Config & { mockData?: () => any[] }
-            exportPageConfigs[navId] = rest
-        })
-
         return {
-            version: '1.0',
+            version: '2.0',
             exportedAt: new Date().toISOString(),
             navGroups: exportNavGroups,
-            pageConfigs: exportPageConfigs
+            pageConfigs: {} // We migrate to nested structure, so this is empty. Kept for type compatibility.
         }
     }
 
@@ -867,79 +939,77 @@ export function getPage1Config(navId: string): Page1Config | undefined {
      */
     function importFullConfig(data: ExportData): { success: boolean; message: string } {
         try {
-            // 验证版本
-            if (!data.version || !data.navGroups || !data.pageConfigs) {
+            console.log('importFullConfig: Importing config data:', data)
+
+            // 验证基本结构 - 放宽验证，允许缺少某些字段
+            if (!data || typeof data !== 'object') {
                 return { success: false, message: '无效的配置格式' }
             }
 
-            // 导入导航组
-            if (data.navGroups && Array.isArray(data.navGroups)) {
-                // 合并导航组：保留现有的，更新/添加导入的
-                data.navGroups.forEach(importGroup => {
-                    // 查找现有组（按 label 匹配）
-                    let existingGroup = navGroups.value.find(g => g.label === importGroup.label)
+            // 规范化数据输入（兼容不同的 JSON 格式）
+            const navGroupsData = data.navGroups || (data as any).Configs || []
 
-                    if (!existingGroup) {
-                        // 新建组
-                        navGroups.value.push({
-                            label: importGroup.label,
-                            showLabel: importGroup.showLabel,
-                            items: []
-                        })
-                        existingGroup = navGroups.value[navGroups.value.length - 1]
-                    }
+            // 导入导航组 - 完全替换而不是合并，确保云端配置完全覆盖本地
+            if (navGroupsData && Array.isArray(navGroupsData)) {
+                // 清空现有导航组
+                navGroups.value = []
 
-                    // 合并主导航项
-                    importGroup.items?.forEach(importMainItem => {
-                        const existingMainItem = existingGroup!.items.find(i => i.id === importMainItem.id)
+                // 导入所有导航组
+                navGroupsData.forEach((importGroup: any) => {
+                    const items = importGroup.items || importGroup.navitems || []
 
-                        if (existingMainItem) {
-                            // 更新现有项
-                            existingMainItem.title = importMainItem.title
-                            existingMainItem.isOpen = importMainItem.isOpen
+                    navGroups.value.push({
+                        label: importGroup.label,
+                        showLabel: importGroup.showLabel,
+                        items: items.map((mainItem: any) => {
+                            const subItems = mainItem.items || mainItem.navitems || []
 
-                            // 合并子导航项
-                            importMainItem.items?.forEach(importSubItem => {
-                                const existingSub = existingMainItem.items?.find(s => s.id === importSubItem.id)
-                                if (existingSub) {
-                                    existingSub.title = importSubItem.title
-                                    existingSub.url = importSubItem.url || '#'
-                                    existingSub.template = importSubItem.template as 'Page1' | 'Page2' | ''
-                                } else {
-                                    if (!existingMainItem.items) existingMainItem.items = []
-                                    existingMainItem.items.push({
-                                        id: importSubItem.id,
-                                        title: importSubItem.title,
-                                        url: importSubItem.url || '#',
-                                        template: importSubItem.template as 'Page1' | 'Page2' | ''
-                                    })
-                                }
-                            })
-                        } else {
-                            // 新建主导航项
-                            existingGroup!.items.push({
-                                id: importMainItem.id,
-                                title: importMainItem.title,
+                            return {
+                                id: mainItem.id,
+                                title: mainItem.title || mainItem.label,
                                 url: '#',
-                                isOpen: importMainItem.isOpen,
-                                items: importMainItem.items?.map(sub => ({
-                                    id: sub.id,
-                                    title: sub.title,
-                                    url: sub.url || '#',
-                                    template: sub.template as 'Page1' | 'Page2' | ''
-                                }))
-                            })
-                        }
+                                isOpen: mainItem.isOpen,
+                                items: subItems.map((sub: any) => {
+                                    // Phase 2: 如果存在内嵌的 component 配置，提取到 page1Configs
+                                    let componentConfig: Page1Config | undefined
+
+                                    if (sub.component) {
+                                        // 需要补充 mockData 函数，因为导出时忽略了它
+                                        componentConfig = {
+                                            ...sub.component,
+                                            mockData: () => []
+                                        } as Page1Config
+
+                                        page1Configs.value[sub.id] = componentConfig
+                                    }
+
+                                    // 如果有 component 配置但没有指定 template，默认使用 Page1
+                                    const inferredTemplate = sub.template || (componentConfig ? 'Page1' : '')
+
+                                    return {
+                                        id: sub.id,
+                                        title: sub.title || sub.label,
+                                        url: sub.url || '#',
+                                        template: inferredTemplate as 'Page1' | 'Page2' | '',
+                                        component: componentConfig // 使用包含 mockData 的完整配置
+                                    }
+                                })
+                            }
+                        }) || []
                     })
                 })
             }
 
             // 导入页面配置
             if (data.pageConfigs) {
-                Object.entries(data.pageConfigs).forEach(([navId, config]) => {
-                    // 合并或覆盖配置
+                Object.entries(data.pageConfigs).forEach(([navId, config]: [string, any]) => {
+                    // 显式列出要导入的字段，排除废弃的 actions 字段
                     page1Configs.value[navId] = {
-                        ...config,
+                        ...(config.topBar && { topBar: config.topBar }),
+                        filterArea: config.filterArea,
+                        ...(config.actionsArea && { actionsArea: config.actionsArea }),
+                        ...(config.cardArea && { cardArea: config.cardArea }),
+                        tableArea: config.tableArea,
                         mockData: mockDataFunctions.value[navId] || (() => [])
                     } as Page1Config
                 })
@@ -952,13 +1022,158 @@ export function getPage1Config(navId: string): Page1Config | undefined {
         }
     }
 
+    // ============================================
+    // Supabase 云端配置存储
+    // ============================================
+
+    /**
+     * 保存配置到 Supabase
+     */
+    async function saveToSupabase(): Promise<{ success: boolean; message: string }> {
+        try {
+            // 获取当前用户
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                return { success: false, message: '用户未登录' }
+            }
+
+            const exportData = exportFullConfig()
+
+            const { error } = await supabase
+                .from('user_configs')
+                .upsert(
+                    {
+                        user_id: user.id,
+                        config_data: exportData,
+                        updated_at: new Date().toISOString()
+                    },
+                    { onConflict: 'user_id' }
+                )
+
+            if (error) {
+                console.error('Failed to save to Supabase:', error)
+                toast.error('保存失败', { description: error.message })
+                return { success: false, message: error.message }
+            }
+
+            toast.success('配置已保存到云端')
+
+            return { success: true, message: '配置已保存到云端' }
+        } catch (e) {
+            console.error('Failed to save to Supabase:', e)
+            toast.error('保存失败', { description: (e as Error).message })
+            return { success: false, message: '保存失败: ' + (e as Error).message }
+        }
+    }
+
+    /**
+     * 从 Supabase 加载配置
+     */
+    async function loadFromSupabase(): Promise<{ success: boolean; message: string }> {
+        isConfigLoading.value = true
+        try {
+            // 获取当前用户
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                toast.error('未登录', { description: '请先登录后再加载配置' })
+                isConfigLoading.value = false
+                return { success: false, message: '用户未登录' }
+            }
+
+            const { data, error } = await supabase
+                .from('user_configs')
+                .select('config_data')
+                .eq('user_id', user.id)
+                .single()
+
+            if (error) {
+                // PGRST116 表示没有找到记录
+                if (error.code === 'PGRST116') {
+                    console.log('用户没有云端配置，显示空状态')
+                    toast.info('未找到云端配置', { description: '请通过 AI 助手创建配置' })
+                    // 保持空状态
+                    isConfigLoaded.value = true
+                    isConfigLoading.value = false
+                    return { success: true, message: '无云端配置' }
+                }
+                console.error('Failed to load from Supabase:', error)
+                toast.error('加载失败', { description: error.message })
+                isConfigLoading.value = false
+                return { success: false, message: error.message }
+            }
+
+            if (data?.config_data) {
+                // 先清除 localStorage，确保使用云端数据
+                localStorage.removeItem(STORAGE_KEY_PAGE1_CONFIGS)
+                // 导入云端配置
+                const result = importFullConfig(data.config_data)
+                if (result.success) {
+                    console.log('已从云端加载配置')
+                    toast.success('已加载云端配置')
+                    // 将云端配置同步到 localStorage
+                    savePage1ConfigsToStorage(page1Configs.value)
+
+                    // 初始化导航状态
+                    if (navGroups.value.length > 0) {
+                        initNavigation(navGroups.value)
+                    }
+
+                    isConfigLoaded.value = true
+                } else {
+                    toast.error('配置导入失败', { description: result.message })
+                }
+                isConfigLoading.value = false
+                return result
+            }
+
+            isConfigLoaded.value = true
+            isConfigLoading.value = false
+            return { success: true, message: '配置加载成功' }
+        } catch (e) {
+            console.error('Failed to load from Supabase:', e)
+            isConfigLoading.value = false
+            return { success: false, message: '加载失败: ' + (e as Error).message }
+        }
+    }
+
+    /**
+     * 导入 JSON 配置并同步到云端
+     */
+    async function importAndSyncToCloud(data: ExportData): Promise<{ success: boolean; message: string }> {
+        // 先导入到本地
+        const importResult = importFullConfig(data)
+        if (!importResult.success) {
+            return importResult
+        }
+
+        // 再同步到云端
+        const saveResult = await saveToSupabase()
+        if (!saveResult.success) {
+            return { success: false, message: `导入成功但同步失败: ${saveResult.message}` }
+        }
+
+        return { success: true, message: '配置导入并同步成功' }
+    }
+
     return {
         // State
         navGroups,
         page1Configs,
+        // Preview State
+        previewMode,
+        previewConfig,
+        // 加载状态
+        isConfigLoaded,
+        isConfigLoading,
         // Getters
+        isInPreviewMode,
+        effectiveNavGroups,
         getNavGroup,
         getPage1Config,
+        // Preview Actions
+        setPreviewConfig,
+        clearPreviewConfig,
+        applyPreviewConfig,
         // Nav Actions
         addNavMainItem,
         updateNavMainItem,
@@ -980,5 +1195,9 @@ export function getPage1Config(navId: string): Page1Config | undefined {
         getTemplateConfig,
         exportFullConfig,
         importFullConfig,
+        // Supabase Actions
+        saveToSupabase,
+        loadFromSupabase,
+        importAndSyncToCloud,
     }
 })
